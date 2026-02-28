@@ -1,5 +1,8 @@
 # QEU Product Bundling System
 
+[![Open Repository](https://img.shields.io/badge/Open%20on-GitHub-181717?logo=github)](https://github.com/abodefy43-spec/qeu-bundling-system)
+[![Run Easy Mode](https://img.shields.io/badge/Run-Easy%20Mode-2f5bea)](#quick-start-easiest)
+
 ## Quick Start (Easiest)
 
 Windows users can double-click `easy_run.bat` and choose:
