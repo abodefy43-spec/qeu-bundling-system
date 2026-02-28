@@ -1,0 +1,70 @@
+{% extends "layout.html" %}
+{% block content %}
+  <section class="panel">
+    <div class="panel-header">
+      <h2>All Bundle Opportunities</h2>
+      <form method="get" action="{{ url_for('all_bundles') }}" class="search-form">
+        <input type="text" name="q" value="{{ query }}" placeholder="Search by product name…">
+        <button type="submit" class="btn">Search</button>
+      </form>
+    </div>
+    {% if data_warning %}
+      <p class="empty">{{ data_warning }}</p>
+    {% elif rows %}
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Product 1</th>
+              <th>Price 1</th>
+              <th>Product 2</th>
+              <th>Price 2</th>
+              <th>Product 3</th>
+              <th>Price 3</th>
+              <th>Discounts</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                {% for item in row.bundle_items %}
+                <td class="product-name-cell">
+                  {{ item.name }}
+                  {% if item.is_free %}<span class="badge badge--free">FREE</span>{% endif %}
+                </td>
+                <td>
+                  {% if item.is_free %}
+                    <span class="price-original--struck">{{ item.price_sar }}</span>
+                  {% else %}
+                    <span class="price-original--struck">{{ item.price_sar }}</span>
+                    <span class="price-after">{{ item.price_after_sar }}</span>
+                  {% endif %}
+                </td>
+                {% endfor %}
+                {% if row.bundle_items|length < 3 %}
+                <td class="product-name-cell">—</td><td>—</td>
+                {% if row.bundle_items|length < 2 %}
+                <td class="product-name-cell">—</td><td>—</td>
+                {% endif %}
+                {% endif %}
+                <td>
+                  {% for item in row.bundle_items %}
+                    {% if not item.is_free %}
+                      <span class="badge badge--discount">{{ item.discount }} OFF</span>
+                    {% endif %}
+                  {% endfor %}
+                  {% if row.has_ramadan %}<span class="badge badge--ramadan">Ramadan</span>{% endif %}
+                  {% if row.is_triple %}<span class="badge badge--triple">3-Item</span>{% endif %}
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="empty">No matching bundles found.</p>
+    {% endif %}
+  </section>
+{% endblock %}

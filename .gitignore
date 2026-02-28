@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Model / data artifacts
+*.pkl
+*.npy
+*.npz
+
+# Output
+output/
+
+# Large datasets / generated artifacts (too large for GitHub)
+data first/
+data/filtered_orders.pkl
+data/top_product_similarity.npz
+data/top_product_similarity_thresholded.npz
+data/product_embeddings.npy
+data/training_data.csv
+data/cached_products.csv
+
+# IDE
+.idea/
+.vscode/
+.claude/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

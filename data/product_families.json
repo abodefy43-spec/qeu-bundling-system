@@ -1,0 +1,232 @@
+{
+  "families": [
+    {
+      "id": "rice_centric",
+      "description": "Rice and rice-derived staples and rice-seasoning products.",
+      "keywords": [
+        "kabsa rice spices",
+        "biryani rice spices",
+        "rice spices",
+        "rice cake",
+        "rice flour",
+        "basmati rice",
+        "long grain rice",
+        "medium grain rice",
+        "أرز",
+        "رز",
+        "rice"
+      ]
+    },
+    {
+      "id": "ghee_fats",
+      "description": "Ghee and fat-bases that are close substitutes.",
+      "keywords": [
+        "vegetable ghee",
+        "butter ghee",
+        "pure butter ghee",
+        "clarified butter",
+        "سمن نباتي",
+        "سمن",
+        "زبدة",
+        "ghee"
+      ]
+    },
+    {
+      "id": "chips_snacks",
+      "description": "Chips/crisps style snack products.",
+      "keywords": [
+        "potato chips",
+        "chips",
+        "crisps",
+        "بطاطس",
+        "شيبس"
+      ]
+    },
+    {
+      "id": "milk_dairy",
+      "description": "Milk and milk-format products likely to substitute each other.",
+      "keywords": [
+        "evaporated milk",
+        "condensed milk",
+        "milk powder",
+        "full cream milk",
+        "low fat milk",
+        "لبن بودرة",
+        "لبن",
+        "حليب",
+        "milk"
+      ]
+    },
+    {
+      "id": "cheese",
+      "description": "Cheese-centric products likely to substitute each other.",
+      "keywords": [
+        "cream cheese",
+        "mozzarella",
+        "cheddar",
+        "processed cheese",
+        "جبنة",
+        "جبن",
+        "cheese"
+      ]
+    },
+    {
+      "id": "tomato_paste",
+      "description": "Tomato paste and tomato sauce products.",
+      "keywords": [
+        "tomato paste",
+        "tomato sauce",
+        "tomato puree",
+        "معجون طماطم",
+        "معجون",
+        "صلصة طماطم",
+        "طماطم معلبة",
+        "طماطم",
+        "passata",
+        "georgina tomato",
+        "saudi tomato"
+      ]
+    },
+    {
+      "id": "cooking_oil",
+      "description": "Cooking oils that substitute each other.",
+      "keywords": [
+        "sunflower oil",
+        "vegetable oil",
+        "corn oil",
+        "canola oil",
+        "زيت دوار الشمس",
+        "زيت نباتي",
+        "زيت ذرة"
+      ]
+    },
+    {
+      "id": "tea",
+      "description": "Tea products that substitute each other.",
+      "keywords": [
+        "black tea",
+        "green tea",
+        "tea bags",
+        "شاي أسود",
+        "شاي أخضر",
+        "شاي",
+        "tea"
+      ]
+    },
+    {
+      "id": "juice",
+      "description": "Juice and juice drinks that substitute each other.",
+      "keywords": [
+        "orange juice",
+        "apple juice",
+        "mango juice",
+        "mixed fruit juice",
+        "عصير برتقال",
+        "عصير تفاح",
+        "عصير",
+        "nectar",
+        "juice"
+      ]
+    },
+    {
+      "id": "bread",
+      "description": "Bread products that substitute each other.",
+      "keywords": [
+        "white bread",
+        "brown bread",
+        "whole wheat bread",
+        "sliced bread",
+        "خبز أبيض",
+        "خبز بر",
+        "خبز",
+        "toast",
+        "bread"
+      ]
+    },
+    {
+      "id": "yogurt",
+      "description": "Yogurt products that substitute each other.",
+      "keywords": [
+        "plain yogurt",
+        "flavored yogurt",
+        "greek yogurt",
+        "زبادي",
+        "روب",
+        "yogurt",
+        "yoghurt"
+      ]
+    },
+    {
+      "id": "chicken",
+      "description": "Chicken products that substitute each other.",
+      "keywords": [
+        "whole chicken",
+        "chicken breast",
+        "chicken thigh",
+        "chicken wings",
+        "chicken nuggets",
+        "chicken strips",
+        "chicken tenders",
+        "chicken burger",
+        "chicken fillet",
+        "chicken popcorn",
+        "breaded chicken",
+        "دجاج كامل",
+        "صدور دجاج",
+        "أفخاذ دجاج",
+        "دجاج",
+        "chicken"
+      ]
+    },
+    {
+      "id": "sugar",
+      "description": "Sugar products that substitute each other.",
+      "keywords": [
+        "white sugar",
+        "brown sugar",
+        "cane sugar",
+        "سكر أبيض",
+        "سكر بني",
+        "سكر",
+        "sugar"
+      ]
+    },
+    {
+      "id": "flour",
+      "description": "Flour products that substitute each other.",
+      "keywords": [
+        "all purpose flour",
+        "whole wheat flour",
+        "white flour",
+        "دقيق أبيض",
+        "دقيق بر",
+        "دقيق",
+        "flour"
+      ]
+    },
+    {
+      "id": "tuna_canned_fish",
+      "description": "Canned tuna and fish products.",
+      "keywords": [
+        "tuna",
+        "canned tuna",
+        "light tuna",
+        "تونة",
+        "تونا",
+        "سمك معلب"
+      ]
+    },
+    {
+      "id": "cardamom_spices",
+      "description": "Cardamom products that substitute each other.",
+      "keywords": [
+        "cardamom",
+        "ground cardamom",
+        "cardamom pods",
+        "هيل",
+        "هال",
+        "حبهان"
+      ]
+    }
+  ]
+}
