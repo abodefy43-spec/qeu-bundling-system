@@ -1,7 +1,0 @@
-file,size_mb
-filtered_orders.pkl,142.42
-top_product_similarity.npz,54.16
-product_embeddings.npy,7.76
-training_data.csv,6.88
-copurchase_scores.csv,0.73
-top_bundles.csv,0.04

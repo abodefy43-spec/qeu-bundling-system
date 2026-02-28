@@ -24,6 +24,15 @@ data/top_product_similarity_thresholded.npz
 data/product_embeddings.npy
 data/training_data.csv
 data/cached_products.csv
+data/arabic_translations_cache.json
+data/artifact_sizes.csv
+data/category_importance.csv
+data/copurchase_scores.csv
+data/embedding_mapping.json
+data/product_categories.csv
+data/product_recipe_scores.csv
+data/top_bundles.csv
+data/top_product_ids.json
 
 # IDE
 .idea/
