@@ -1,6 +1,18 @@
 {% extends "layout.html" %}
 {% block content %}
 
+  <section class="panel">
+    <h2>What I Built (Simple Overview)</h2>
+    <p>
+      I built this system to automatically suggest strong product bundles from real order behavior, then show the best options in a simple dashboard.
+      The pipeline first selects compatible product pairs, then trains ML models to predict which item should be free and how much discount to apply.
+      After that, it generates the final ranked bundle files and updates this Flask page so the newest results are visible right away.
+    </p>
+    <p style="margin: 10px 0 0; color: var(--muted);">
+      To make refreshing easier, I connected the quick run flow to launch both the new results pipeline and the presentation together, so one run updates everything in one place.
+    </p>
+  </section>
+
   <!-- KPI Section -->
   <section class="panel">
     <div class="panel-header">

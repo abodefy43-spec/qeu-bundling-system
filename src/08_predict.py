@@ -548,7 +548,13 @@ def _write_top10_report(top10: pd.DataFrame, path) -> None:
     ]
     for _, row in top10.iterrows():
         is_triple = bool(row.get("is_triple_bundle", False))
-        disc = row["discount_amount"]
+        discount_values = [
+            float(row.get("discount_pred_a", 0.0)),
+            float(row.get("discount_pred_b", 0.0)),
+        ]
+        if is_triple and "discount_pred_c" in row:
+            discount_values.append(float(row.get("discount_pred_c", 0.0)))
+        disc = float(row.get("discount_amount", np.mean(discount_values)))
         score = row["final_score"]
         shared = int(row.get("shared_categories_count", 0))
         shared_list = str(row.get("shared_categories", "")).replace("|", ", ")
@@ -615,6 +621,6 @@ def predict_single(product_a_features: dict, product_b_features: dict) -> dict:
 if __name__ == "__main__":
     print("Phase 8: Generating final bundle predictions ...")
     result = predict_bundles()
-    cols = ["product_a_name", "product_b_name", "free_product", "discount_amount", "final_score"]
+    cols = ["product_a_name", "product_b_name", "free_product", "discount_pred_a", "discount_pred_b", "final_score"]
     print(f"\n  Top 15 final bundles:\n{result[cols].head(15).to_string()}")
     print("Phase 8 complete.")

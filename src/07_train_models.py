@@ -13,6 +13,7 @@ from sklearn.compose import ColumnTransformer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from xgboost import XGBClassifier, XGBRegressor
 from sklearn.multioutput import MultiOutputRegressor
+from sklearn.base import clone
 from sklearn.metrics import (
     accuracy_score,
     classification_report,
@@ -289,14 +290,16 @@ def train_models(data_dir: Path | None = None):
     r2 = float(r2_score(y_reg_test, y_reg_pred))
 
     cls_cv = cross_val_score(
-        clf.__class__(**{k: v for k, v in clf.get_params().items() if k != "callbacks"}),
-        X_transformed, y_cls,
+        clone(clf),
+        X_transformed,
+        y_cls,
         cv=StratifiedKFold(n_splits=5, shuffle=True, random_state=42),
         scoring="accuracy",
     )
     reg_cv = cross_val_score(
-        reg.__class__(**{k: v for k, v in reg.get_params().items() if k != "callbacks"}),
-        X_transformed, y_reg,
+        clone(reg),
+        X_transformed,
+        y_reg,
         cv=KFold(n_splits=5, shuffle=True, random_state=42),
         scoring="neg_root_mean_squared_error",
     )
