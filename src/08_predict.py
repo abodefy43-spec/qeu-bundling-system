@@ -17,6 +17,7 @@ except ImportError:
     from product_name_translation import translate_arabic_to_english
 
 DISCOUNT_CAP_PCT = 30.0
+ENABLE_TRIPLE_BUNDLES = False  # Set True to allow 3-item bundles
 
 
 def _data_dir() -> Path:
@@ -242,6 +243,14 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
 
 def _attach_third_products(output: pd.DataFrame, base, cache_path) -> pd.DataFrame:
     """Try to find a complementary 3rd product for each bundle."""
+    if not ENABLE_TRIPLE_BUNDLES:
+        output["product_c"] = None
+        output["product_c_name"] = ""
+        output["product_c_price"] = 0.0
+        output["is_triple_bundle"] = False
+        print(f"  Triple bundles: disabled (2-item only)")
+        return output
+
     cat_df_path = base / "product_categories.csv"
     if not cat_df_path.exists():
         output["product_c"] = None

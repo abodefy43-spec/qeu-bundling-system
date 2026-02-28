@@ -24,10 +24,10 @@ goto done
 
 :quick
 echo.
-echo Running quick refresh (new results)...
+echo Running quick refresh (new results) + presentation...
 call new_results.bat
 if errorlevel 1 goto fail
-goto dashboard
+goto done
 
 :full
 echo.
