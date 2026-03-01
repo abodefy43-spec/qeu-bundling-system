@@ -40,6 +40,7 @@ NUMERIC_FEATURES = [
     "shared_categories_count",
     "shared_category_score",
     "category_match",
+    "is_campaign_pair",
 ]
 CATEGORICAL_FEATURES = [
     "category_a",
@@ -110,6 +111,8 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
     bundles = pd.read_csv(base / "top_bundles.csv")
     clf, reg, preprocessor = _load_models(out)
 
+    if "is_campaign_pair" not in bundles.columns:
+        bundles["is_campaign_pair"] = 0
     for col in CATEGORICAL_FEATURES:
         bundles[col] = bundles[col].fillna("other").astype(str)
     for col in NUMERIC_FEATURES:
@@ -151,6 +154,18 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
     bundles["product_family_b"] = bundles["product_family_b"].apply(_normalise_family_value)
     bundles["frequency_score"] = pd.to_numeric(bundles["frequency_score"], errors="coerce").fillna(0.0)
 
+    # Join product pictures
+    pic_path = base / "product_pictures.csv"
+    if pic_path.exists():
+        pics = pd.read_csv(pic_path)
+        pic_lookup = dict(zip(pics["product_id"].astype(int), pics["picture_url"].astype(str)))
+        bundles["product_a_picture"] = bundles["product_a"].map(pic_lookup).fillna("")
+        bundles["product_b_picture"] = bundles["product_b"].map(pic_lookup).fillna("")
+        print(f"  Joined product pictures ({len(pic_lookup):,} products)")
+    else:
+        bundles["product_a_picture"] = ""
+        bundles["product_b_picture"] = ""
+
     # Translate Arabic product names to English
     cache_path = base / "arabic_translations_cache.json"
     bundles["product_a_name"] = bundles["product_a_name"].apply(
@@ -165,6 +180,7 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
         "product_a", "product_b",
         "product_a_name", "product_b_name",
         "product_a_price", "product_b_price",
+        "product_a_picture", "product_b_picture",
         "free_item", "discount_pred_a", "discount_pred_b",
         "has_ramadan", "has_saudi_dish", "ramadan_boost",
         "shared_categories_count", "shared_category_score",
@@ -214,6 +230,7 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
     simple_cols = [
         "product_a_name", "product_b_name",
         "product_a_price", "product_b_price",
+        "product_a_picture", "product_b_picture",
         "free_product", "discount_pred_a", "discount_pred_b",
         "price_after_discount_a", "price_after_discount_b",
     ]

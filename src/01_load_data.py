@@ -32,6 +32,10 @@ REQUIRED_ORDER_COLUMNS = [
     "discount_amount",
     "quantity",
     "created_at",
+    "campaign_id",
+    "campaign_type",
+    "product_role",
+    "product_picture",
 ]
 
 

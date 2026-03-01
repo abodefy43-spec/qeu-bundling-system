@@ -123,6 +123,10 @@ def _normalise_bundle_columns(df: pd.DataFrame) -> pd.DataFrame:
     is_triple = _series_from_columns(data, ["is_triple_bundle"], False)
     data["is_triple"] = is_triple.apply(lambda v: str(v).strip().lower() in {"true", "1", "yes"})
 
+    data["product_a_picture"] = _series_from_columns(data, ["product_a_picture"], "")
+    data["product_b_picture"] = _series_from_columns(data, ["product_b_picture"], "")
+    data["product_c_picture"] = _series_from_columns(data, ["product_c_picture"], "")
+
     return data
 
 
@@ -166,6 +170,7 @@ def _to_records(df: pd.DataFrame) -> list[dict[str, object]]:
         "price_after_a_sar", "price_after_b_sar", "price_after_c_sar",
         "free_product_raw", "discount_pct", "is_triple", "has_ramadan",
         "discount_pred_a", "discount_pred_b", "discount_pred_c",
+        "product_a_picture", "product_b_picture", "product_c_picture",
     ]
     rename_map = {
         "product_a_name": "product_a",
@@ -198,6 +203,11 @@ def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
             discount_c = (float(discount_a or 0) + float(discount_b or 0)) / 2
         except (TypeError, ValueError):
             discount_c = 0
+    pic_keys = {
+        "product_a": "product_a_picture",
+        "product_b": "product_b_picture",
+        "product_c": "product_c_picture",
+    }
     slots = [
         ("product_a", "product_a", "price_a_sar", "price_after_a_sar", discount_a),
         ("product_b", "product_b", "price_b_sar", "price_after_b_sar", discount_b),
@@ -210,11 +220,14 @@ def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
             continue
         price_sar = str(rec.get(price_key, "0") or "0")
         after_sar = str(rec.get(after_key, "0") or "0")
+        image_url = str(rec.get(pic_keys.get(key, ""), "") or "").strip()
+        if image_url.lower() == "nan":
+            image_url = ""
         try:
             disc_str = f"{float(disc or 0):,.1f}%" if disc is not None else "0%"
         except (TypeError, ValueError):
             disc_str = "0%"
-        item = {"name": name, "price_sar": price_sar, "price_after_sar": after_sar, "discount": disc_str, "is_free": key == free}
+        item = {"name": name, "price_sar": price_sar, "price_after_sar": after_sar, "discount": disc_str, "is_free": key == free, "image_url": image_url}
         if key == free:
             free_item = item
         else:

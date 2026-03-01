@@ -28,6 +28,14 @@ def _import_phase(filename: str):
 def main():
     t0 = time.time()
 
+    # Phase 0
+    print("=" * 60)
+    print("PHASE 0: Extract Campaigns & Product Pictures")
+    print("=" * 60)
+    m = _import_phase("00_extract_campaigns.py")
+    m.extract_campaigns()
+    print()
+
     # Phase 1
     print("=" * 60)
     print("PHASE 1: Data Loading & Preprocessing")

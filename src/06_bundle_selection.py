@@ -15,12 +15,13 @@ except ImportError:
 import pandas as pd
 from scipy import sparse
 
-SHARED_CATEGORY_WEIGHT = 0.25
-RECIPE_WEIGHT = 0.25
-COPURCHASE_WEIGHT = 0.25
+SHARED_CATEGORY_WEIGHT = 0.22
+RECIPE_WEIGHT = 0.22
+COPURCHASE_WEIGHT = 0.22
 EMBEDDING_WEIGHT = 0.05
-VERSATILITY_WEIGHT = 0.05
-FREQUENCY_WEIGHT = 0.15
+VERSATILITY_WEIGHT = 0.04
+FREQUENCY_WEIGHT = 0.10
+CAMPAIGN_WEIGHT = 0.15
 
 MIN_ORDERS_PER_PRODUCT = 50
 TOP_PRODUCTS_FOR_PAIRING = 4000
@@ -301,6 +302,24 @@ def select_bundles(
         for a, b in zip(pairs["product_a"], pairs["product_b"])
     ]
 
+    # Campaign bundle co-occurrence boost
+    campaign_bundle_path = base / "campaign_bundle_pairs.csv"
+    campaign_lookup: dict[tuple[int, int], float] = {}
+    if campaign_bundle_path.exists():
+        cb = pd.read_csv(campaign_bundle_path)
+        if not cb.empty:
+            max_occ = float(cb["occurrences"].max()) if cb["occurrences"].max() > 0 else 1.0
+            for _, r in cb.iterrows():
+                score = float(r["occurrences"]) / max_occ * 100.0
+                a, b = int(r["product_a"]), int(r["product_b"])
+                campaign_lookup[(a, b)] = score
+                campaign_lookup[(b, a)] = score
+            print(f"  Loaded {len(cb):,} campaign bundle pairs for scoring")
+    pairs["campaign_score"] = [
+        campaign_lookup.get((int(a), int(b)), 0.0)
+        for a, b in zip(pairs["product_a"], pairs["product_b"])
+    ]
+
     product_a_ids = pairs["product_a"].to_numpy(dtype=np.int64)
     product_b_ids = pairs["product_b"].to_numpy(dtype=np.int64)
     shared_counts = np.fromiter(
@@ -344,6 +363,7 @@ def select_bundles(
         + pairs["embedding_score"] * EMBEDDING_WEIGHT
         + pairs["versatility_score"] * VERSATILITY_WEIGHT
         + pairs["frequency_score"] * FREQUENCY_WEIGHT
+        + pairs["campaign_score"] * CAMPAIGN_WEIGHT
     )
     pairs["ramadan_boost"] = np.where(
         has_ramadan & has_saudi_dish,

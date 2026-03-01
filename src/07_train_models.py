@@ -51,6 +51,7 @@ NUMERIC_FEATURES = [
     "shared_categories_count",
     "shared_category_score",
     "category_match",
+    "is_campaign_pair",
 ]
 CATEGORICAL_FEATURES = [
     "category_a",
@@ -160,6 +161,7 @@ def _prepare_dataset(data_dir: Path | None = None) -> pd.DataFrame:
                     "importance_a": str(rec_a.get("saudi_importance", "low")),
                     "importance_b": str(rec_b.get("saudi_importance", "low")),
                     "category_match": int(category_a == category_b),
+                    "is_campaign_pair": 0,
                     "free_item": int(free_label),
                     "discount_amount": float(np.clip(discount_amount, 0, 100)),
                     "discount_a": float(np.clip(a_disc, 0, 100)),
@@ -178,6 +180,38 @@ def _prepare_dataset(data_dir: Path | None = None) -> pd.DataFrame:
     df = pd.DataFrame(rows).drop_duplicates(
         subset=["product_a", "product_b", "product_a_price", "product_b_price"]
     )
+
+    # Override labels with campaign ground-truth where available
+    campaign_path = base / "campaign_pairs.csv"
+    if campaign_path.exists():
+        cp = pd.read_csv(campaign_path)
+        if not cp.empty:
+            cp["product_a"] = cp["product_a"].astype(int)
+            cp["product_b"] = cp["product_b"].astype(int)
+            gt = (
+                cp.groupby(["product_a", "product_b"])
+                .agg(free_item=("free_item", lambda x: x.mode().iloc[0]),
+                     occurrences=("occurrences", "sum"))
+                .reset_index()
+            )
+            gt_lookup = {
+                (int(r["product_a"]), int(r["product_b"])): int(r["free_item"])
+                for _, r in gt.iterrows()
+            }
+            overridden = 0
+            for idx, row in df.iterrows():
+                key = (int(row["product_a"]), int(row["product_b"]))
+                rev_key = (key[1], key[0])
+                if key in gt_lookup:
+                    df.at[idx, "free_item"] = gt_lookup[key]
+                    df.at[idx, "is_campaign_pair"] = 1
+                    overridden += 1
+                elif rev_key in gt_lookup:
+                    df.at[idx, "free_item"] = 1 - gt_lookup[rev_key]
+                    df.at[idx, "is_campaign_pair"] = 1
+                    overridden += 1
+            print(f"  Campaign ground-truth labels applied to {overridden:,} training rows")
+
     for col in CATEGORICAL_FEATURES:
         df[col] = df[col].fillna("other").astype(str)
     for col in NUMERIC_FEATURES:
