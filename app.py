@@ -26,6 +26,7 @@ def dashboard():
         page_title="Executive Dashboard",
         kpis=data.kpis,
         top10_rows=data.top10_rows,
+        person_recommendations=data.person_recommendations or [],
         data_warning=data.data_warning,
         run_status=status,
     )

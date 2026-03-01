@@ -153,6 +153,86 @@ h2 { margin: 0 0 14px; font-size: 1.15rem; font-weight: 700; }
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
 }
 
+.people-reco__intro {
+  margin-top: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.people-reco-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+}
+
+.people-reco-card {
+  background: #ffffff;
+  border-color: #d9e2f2;
+  padding: 14px 16px;
+}
+
+.people-reco-card__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.people-reco-card__person {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+.badge--orders {
+  background: #e0e7ff;
+  color: #4338ca;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.people-reco-card__history-label {
+  margin: 0 0 4px;
+  font-size: 0.75rem;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.people-reco-card__meta {
+  margin: 8px 0 6px;
+  color: #334155;
+  font-size: 0.85rem;
+}
+
+.people-reco-card__meta strong {
+  color: #0f172a;
+}
+
+.people-reco-card__history {
+  margin: 0 0 8px;
+  color: #475569;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.people-reco-card__history strong {
+  color: #1e293b;
+}
+
+.people-reco-card__free {
+  margin: 8px 0 0;
+  color: #059669;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.people-reco-card__free strong {
+  color: #047857;
+}
+
 .bundle-card {
   border: 2px solid #cbd5e1;
   border-radius: 12px;
@@ -232,6 +312,17 @@ h2 { margin: 0 0 14px; font-size: 1.15rem; font-weight: 700; }
   gap: 2px;
   flex-shrink: 0;
   min-width: 5.5rem;
+}
+.price-product-name {
+  display: block;
+  max-width: 13rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .bundle-card__prices .price-row {
   display: flex;
@@ -349,6 +440,7 @@ td .badge { vertical-align: middle; }
 
 @media (max-width: 700px) {
   .bundle-grid { grid-template-columns: 1fr; }
+  .people-reco-grid { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .topbar-inner { flex-direction: column; text-align: center; }
 }

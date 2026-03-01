@@ -4,24 +4,49 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from pathlib import Path
 
 import numpy as np
 
 try:
-    from product_families import load_families
+    from product_families import assign_family, load_families
 except ImportError:
-    from src.product_families import load_families
+    from src.product_families import assign_family, load_families
 import pandas as pd
 from scipy import sparse
+import pickle
 
-SHARED_CATEGORY_WEIGHT = 0.22
-RECIPE_WEIGHT = 0.22
-COPURCHASE_WEIGHT = 0.22
+NUMERIC_FEATURES = [
+    "product_a_price",
+    "product_b_price",
+    "recipe_score_a",
+    "recipe_score_b",
+    "purchase_score",
+    "embedding_score",
+    "shared_categories_count",
+    "shared_category_score",
+    "category_match",
+    "is_campaign_pair",
+]
+CATEGORICAL_FEATURES = [
+    "category_a",
+    "category_b",
+    "importance_a",
+    "importance_b",
+]
+ALL_FEATURES = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+
+SHARED_CATEGORY_WEIGHT = 0.15
+RECIPE_WEIGHT = 0.15
+COPURCHASE_WEIGHT = 0.15
 EMBEDDING_WEIGHT = 0.05
-VERSATILITY_WEIGHT = 0.04
-FREQUENCY_WEIGHT = 0.10
-CAMPAIGN_WEIGHT = 0.15
+VERSATILITY_WEIGHT = 0.03
+FREQUENCY_WEIGHT = 0.07
+CAMPAIGN_WEIGHT = 0.10
+MODEL_SCORE_WEIGHT = 0.30
+
+USE_MODEL_FOR_RANKING = True
 
 MIN_ORDERS_PER_PRODUCT = 50
 TOP_PRODUCTS_FOR_PAIRING = 4000
@@ -30,12 +55,24 @@ TOP_N_BUNDLES = 100
 MIN_SHARED_CATEGORIES = 2
 MAX_EMBEDDING_SIMILARITY = 55.0
 MAX_BUNDLES_PER_THEME = 3
-MAX_APPEARANCES_PER_PRODUCT = 3
+MAX_APPEARANCES_PER_PRODUCT = 2
 VEGETABLE_PENALTY_ONE = 0.85
 VEGETABLE_PENALTY_BOTH = 0.60
 RAMADAN_BOOST_BASE = 1.08
 RAMADAN_BOOST_DISH = 1.15
 NON_FOOD_TAG = "non_food"
+GENERIC_TAGS = frozenset(
+    {
+        "ingredient",
+        "saudi",
+        "dish",
+        "qeu_category",
+        "saudi_specialties",
+        "saudi_staples",
+        "frequent_purchase",
+        "ramadan",
+    }
+)
 SAUDI_DISH_TAGS = frozenset(
     {
         "kabsa",
@@ -56,6 +93,68 @@ SIZE_WORDS = {
     "l", "liter", "litre", "ml", "pack", "pcs", "pc",
     "قطعة", "قطع", "حبات", "حبة", "x",
 }
+
+
+def _output_dir() -> Path:
+    return Path(__file__).resolve().parents[1] / "output"
+
+
+def _load_models():
+    """Load trained ML models for scoring bundles."""
+    try:
+        out = _output_dir()
+        with (out / "free_item_model.pkl").open("rb") as f:
+            clf = pickle.load(f)
+        with (out / "discount_model.pkl").open("rb") as f:
+            reg = pickle.load(f)
+        with (out / "preprocessor.pkl").open("rb") as f:
+            preprocessor = pickle.load(f)
+        return clf, reg, preprocessor
+    except (FileNotFoundError, OSError):
+        return None, None, None
+
+
+def _score_with_model(pairs_df: pd.DataFrame) -> pd.DataFrame:
+    """Apply ML model to score bundles based on predicted effectiveness."""
+    clf, reg, preprocessor = _load_models()
+    
+    if clf is None or reg is None or preprocessor is None:
+        print("  Model not found - using heuristic scoring only")
+        pairs_df["model_discount_pred"] = 0.0
+        pairs_df["model_score"] = 0.0
+        return pairs_df
+    
+    print("  Applying ML model for bundle scoring...")
+    
+    df = pairs_df.copy()
+    
+    for col in CATEGORICAL_FEATURES:
+        df[col] = df[col].fillna("other").astype(str)
+    for col in NUMERIC_FEATURES:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    
+    X = df[ALL_FEATURES]
+    X_transformed = preprocessor.transform(X)
+    
+    df["free_item_pred"] = clf.predict(X_transformed)
+    
+    discount_pred = reg.predict(X_transformed)
+    if discount_pred.ndim == 1:
+        discount_pred = np.column_stack([discount_pred, discount_pred])
+    
+    df["discount_pred_a"] = np.clip(discount_pred[:, 0], 0, 30).round(2)
+    df["discount_pred_b"] = np.clip(discount_pred[:, 1], 0, 30).round(2)
+    
+    df["model_discount_pred"] = ((df["discount_pred_a"] + df["discount_pred_b"]) / 2).round(2)
+    
+    df["model_score"] = (
+        df["model_discount_pred"] * 0.7 +
+        (1 - df["free_item_pred"]) * 15
+    ).round(2)
+    
+    print(f"  Model scoring complete: avg predicted discount = {df['model_discount_pred'].mean():.1f}%")
+    
+    return df
 
 
 def _data_dir() -> Path:
@@ -234,6 +333,26 @@ def select_bundles(
             cat_df.get("product_family", pd.Series([""] * len(cat_df))).fillna("").astype(str),
         )
     )
+    name_lookup = (
+        orders.drop_duplicates("product_id")
+        .set_index("product_id")["product_name"]
+        .to_dict()
+    )
+    # Re-assign missing product families from live product names to avoid stale cache misses.
+    try:
+        families = load_families(base / "product_families.json")
+        if families:
+            for pid in product_ids:
+                if family_lookup.get(pid):
+                    continue
+                name = str(name_lookup.get(pid, ""))
+                if not name:
+                    continue
+                family = assign_family(name, families)
+                if family:
+                    family_lookup[pid] = family
+    except (OSError, TypeError, ValueError):
+        pass
     tag_lookup = {
         int(pid): _parse_tags(tags, fallback=str(cat_lookup.get(int(pid), "other")))
         for pid, tags in zip(
@@ -249,11 +368,6 @@ def select_bundles(
     price_lookup = (
         orders.groupby("product_id")["unit_price"]
         .median()
-        .to_dict()
-    )
-    name_lookup = (
-        orders.drop_duplicates("product_id")
-        .set_index("product_id")["product_name"]
         .to_dict()
     )
 
@@ -315,6 +429,20 @@ def select_bundles(
                 campaign_lookup[(a, b)] = score
                 campaign_lookup[(b, a)] = score
             print(f"  Loaded {len(cb):,} campaign bundle pairs for scoring")
+    campaign_pairs_path = base / "campaign_pairs.csv"
+    if campaign_pairs_path.exists():
+        try:
+            cp = pd.read_csv(campaign_pairs_path)
+            if not cp.empty and "occurrences" in cp.columns:
+                cp_max = float(cp["occurrences"].max()) if float(cp["occurrences"].max()) > 0 else 1.0
+                for _, r in cp.iterrows():
+                    a, b = int(r["product_a"]), int(r["product_b"])
+                    boost = float(r["occurrences"]) / cp_max * 100.0
+                    campaign_lookup[(a, b)] = max(campaign_lookup.get((a, b), 0.0), boost)
+                    campaign_lookup[(b, a)] = max(campaign_lookup.get((b, a), 0.0), boost)
+                print(f"  Loaded {len(cp):,} buy-x-get-y campaign pairs for scoring")
+        except (OSError, TypeError, ValueError):
+            pass
     pairs["campaign_score"] = [
         campaign_lookup.get((int(a), int(b)), 0.0)
         for a, b in zip(pairs["product_a"], pairs["product_b"])
@@ -331,7 +459,19 @@ def select_bundles(
         count=len(pairs),
     )
     pairs["shared_categories_count"] = shared_counts.astype(int)
-    pairs["shared_category_score"] = np.clip(pairs["shared_categories_count"] * 20.0, 0.0, 100.0)
+    specific_shared_counts = np.fromiter(
+        (
+            len(
+                (tag_lookup.get(int(a), {"other"}) - GENERIC_TAGS)
+                & (tag_lookup.get(int(b), {"other"}) - GENERIC_TAGS)
+            )
+            for a, b in zip(product_a_ids, product_b_ids)
+        ),
+        dtype=np.int16,
+        count=len(pairs),
+    )
+    pairs["specific_shared_count"] = specific_shared_counts.astype(int)
+    pairs["shared_category_score"] = np.clip(pairs["specific_shared_count"] * 12.5, 0.0, 100.0)
     has_ramadan = np.fromiter(
         (
             "ramadan" in (tag_lookup.get(int(a), {"other"}) & tag_lookup.get(int(b), {"other"}))
@@ -381,6 +521,24 @@ def select_bundles(
     )
     pairs["final_score"] = (pairs["final_score"] * pairs["vegetable_penalty"]).round(2)
 
+    pairs["importance_a"] = pairs["product_a"].map(importance_lookup).fillna("low")
+    pairs["importance_b"] = pairs["product_b"].map(importance_lookup).fillna("low")
+    # Ensure ML ranking features exist before calling _score_with_model.
+    pairs["product_a_price"] = pairs["product_a"].map(price_lookup).fillna(0.0)
+    pairs["product_b_price"] = pairs["product_b"].map(price_lookup).fillna(0.0)
+    pairs["category_match"] = (pairs["category_a"] == pairs["category_b"]).astype(int)
+    pairs["is_campaign_pair"] = (pairs["campaign_score"] > 0).astype(int)
+
+    if USE_MODEL_FOR_RANKING:
+        pairs = _score_with_model(pairs)
+        pairs["final_score"] = (
+            pairs["final_score"] * (1 - MODEL_SCORE_WEIGHT)
+            + pairs["model_score"] * MODEL_SCORE_WEIGHT
+        ).round(2)
+    else:
+        pairs["model_score"] = 0.0
+        pairs["model_discount_pred"] = 0.0
+
     filtered = pairs[pairs["shared_categories_count"] >= MIN_SHARED_CATEGORIES].copy()
     print(f"  Pairs passing shared-category minimum ({MIN_SHARED_CATEGORIES}+): {len(filtered):,}")
     filtered = filtered[filtered["embedding_score"] <= MAX_EMBEDDING_SIMILARITY].copy()
@@ -429,13 +587,13 @@ def select_bundles(
     print(f"  Blocked same-family pairs: {before_family - len(filtered):,}")
 
     sorted_candidates = filtered.sort_values(
-        ["cross_category", "versatility_score", "shared_categories_count", "final_score"],
+        ["cross_category", "versatility_score", "specific_shared_count", "final_score"],
         ascending=[False, False, False, False],
     ).reset_index(drop=True)
 
     pool_size = min(250, len(sorted_candidates))
     pool = sorted_candidates.head(pool_size)
-    pool = pool.sample(frac=1, random_state=42)
+    pool = pool.sample(frac=1, random_state=int(time.time()) % 1_000_000)
 
     theme_tokens = _load_theme_tokens(base / "theme_tokens.json")
     theme_counts: dict[str, int] = {}

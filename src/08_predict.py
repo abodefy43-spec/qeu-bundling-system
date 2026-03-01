@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import pickle
 import re
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -61,6 +62,7 @@ NON_FOOD_KEYWORDS = frozenset(
         "conditioner",
         "hair mask",
         "hair balm",
+        "balm",
         "hair cream",
         "hair serum",
         "lotion",
@@ -88,6 +90,53 @@ SAUDI_DISH_TAGS = frozenset(
         "saudi_coffee",
         "chocolate_biscuit_dessert",
     }
+)
+LOW_SIGNAL_TOKENS = frozenset(
+    {
+        "fresh",
+        "original",
+        "premium",
+        "classic",
+        "light",
+        "small",
+        "large",
+        "pack",
+        "pieces",
+        "piece",
+        "flavour",
+        "flavor",
+        "with",
+        "and",
+    }
+)
+LOW_QUALITY_DUPLICATE_GROUPS = (
+    ("salt", "sea salt", "himalayan", "ملح"),
+    ("tomato paste", "معجون", "صلصة طماطم", "passata"),
+    ("tuna", "تونة", "تونا"),
+    ("cumin", "كمون"),
+    ("chicken strips", "chicken nuggets", "chicken tenders", "chicken fillet", "breaded chicken"),
+    ("garlic powder", "onion powder", "black pepper powder"),
+)
+SPICE_STYLE_KEYWORDS = (
+    "spice",
+    "spices",
+    "masala",
+    "powder",
+    "blend",
+    "stock cube",
+    "seasoning",
+    "seasonings",
+    "بهارات",
+    "بهار",
+)
+HERBAL_STYLE_KEYWORDS = (
+    "herb",
+    "herbal",
+    "tea",
+    "threads",
+    "bags",
+    "أعشاب",
+    "شاي",
 )
 
 
@@ -126,6 +175,13 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
         0: "product_a",
         1: "product_b",
     })
+    # Business rule: the free item must be the cheaper one.
+    cheaper_item = np.where(
+        bundles["product_a_price"] <= bundles["product_b_price"],
+        "product_a",
+        "product_b",
+    )
+    bundles["free_item"] = cheaper_item
     discount_pred = reg.predict(X_transformed)
     if discount_pred.ndim == 1:
         discount_pred = np.column_stack([discount_pred, discount_pred])
@@ -216,7 +272,7 @@ def predict_bundles(data_dir: Path | None = None) -> pd.DataFrame:
         )
 
     output = output.sort_values(
-        ["has_ramadan", "has_saudi_dish", "shared_categories_count", "final_score"],
+        ["has_ramadan", "has_saudi_dish", "shared_category_score", "final_score"],
         ascending=[False, False, False, False],
     ).reset_index(drop=True)
     output.index.name = "rank"
@@ -368,9 +424,7 @@ def _attach_third_products(output: pd.DataFrame, base, cache_path) -> pd.DataFra
 
 
 def _select_top_compatible(df: pd.DataFrame, n: int = 10) -> pd.DataFrame:
-    """Pick top-N compatible bundles: 50% 2-item, 50% 3-item."""
-    theme_tokens = _load_theme_tokens(_data_dir() / "theme_tokens.json")
-
+    """Pick top-N compatible bundles with light filtering."""
     ranked = df.copy()
     if "has_ramadan" not in ranked.columns or "has_saudi_dish" not in ranked.columns:
         shared = ranked.get("shared_categories", pd.Series([""] * len(ranked))).fillna("").astype(str)
@@ -384,78 +438,58 @@ def _select_top_compatible(df: pd.DataFrame, n: int = 10) -> pd.DataFrame:
         ["has_ramadan", "has_saudi_dish", "shared_categories_count", "final_score"],
         ascending=[False, False, False, False],
     )
-    is_triple = ranked.get("is_triple_bundle", pd.Series(False, index=ranked.index))
-    is_triple = is_triple.fillna(False).astype(bool)
-    pool_double = ranked[~is_triple]
-    pool_triple = ranked[is_triple]
-    n_half = n // 2
+    if not ENABLE_TRIPLE_BUNDLES and "is_triple_bundle" in ranked.columns:
+        ranked = ranked[~ranked["is_triple_bundle"].fillna(False).astype(bool)].copy()
+    if ranked.empty:
+        result = ranked.head(0).copy()
+        result.index = result.index + 1
+        result.index.name = "rank"
+        return result
 
-    def _pick_from_pool(pool: pd.DataFrame, count: int, used_products: set, used_themes: set) -> list:
-        out = []
-        pool_sub = pool.head(min(40, len(pool))).sample(frac=1, random_state=42)
-        for idx, row in pool_sub.iterrows():
-            if len(out) >= count:
-                break
-            pid_a = int(row["product_a"])
-            pid_b = int(row["product_b"])
-            name_a = str(row.get("product_a_name", ""))
-            name_b = str(row.get("product_b_name", ""))
-            family_a = _normalise_family_value(row.get("product_family_a", ""))
-            family_b = _normalise_family_value(row.get("product_family_b", ""))
-            if pid_a == pid_b or float(row.get("shared_categories_count", 0)) < 2:
-                continue
-            if _is_non_food_product(name_a) or _is_non_food_product(name_b):
-                continue
-            if _is_same_product_variant(name_a, name_b):
-                continue
-            if family_a and family_b and family_a == family_b:
-                continue
-            themes = _extract_themes(name_a, name_b, theme_tokens)
-            if themes & used_themes or pid_a in used_products or pid_b in used_products:
-                continue
-            out.append(idx)
-            used_products.update([pid_a, pid_b])
-            used_themes.update(themes)
-        return out
-
-    used_products: set[int] = set()
-    used_themes: set[str] = set()
-    selected_double = _pick_from_pool(pool_double, n_half, used_products, used_themes)
-    selected_triple = _pick_from_pool(pool_triple, n_half, used_products, used_themes)
-
+    pool = ranked.head(min(120, len(ranked))).sample(
+        frac=1,
+        random_state=int(time.time_ns() % (2**32 - 1)),
+    )
     selected: list[int] = []
-    max_pairs = min(len(selected_double), len(selected_triple))
-    for i in range(max_pairs):
-        # Force display order to start with 3-item, then 2-item.
-        selected.append(selected_triple[i])
-        selected.append(selected_double[i])
+    used_products: set[int] = set()
+
+    def _is_valid(row: pd.Series) -> bool:
+        pid_a = int(row["product_a"])
+        pid_b = int(row["product_b"])
+        name_a = str(row.get("product_a_name", ""))
+        name_b = str(row.get("product_b_name", ""))
+        family_a = _normalise_family_value(row.get("product_family_a", ""))
+        family_b = _normalise_family_value(row.get("product_family_b", ""))
+        if pid_a == pid_b or float(row.get("shared_categories_count", 0)) < 2:
+            return False
+        if pid_a in used_products or pid_b in used_products:
+            return False
+        if _is_non_food_product(name_a) or _is_non_food_product(name_b):
+            return False
+        if _is_same_product_variant(name_a, name_b):
+            return False
+        if family_a and family_b and family_a == family_b:
+            return False
+        return True
+
+    for idx, row in pool.iterrows():
+        if len(selected) >= n:
+            break
+        if not _is_valid(row):
+            continue
+        selected.append(int(idx))
+        used_products.update([int(row["product_a"]), int(row["product_b"])])
 
     if len(selected) < n:
-        already = set(selected) | set(selected_double) | set(selected_triple)
-        remaining = ranked.index.difference(list(already))
-        for idx in remaining:
+        for idx, row in ranked.iterrows():
             if len(selected) >= n:
                 break
-            row = ranked.loc[idx]
-            pid_a, pid_b = int(row["product_a"]), int(row["product_b"])
-            name_a = str(row.get("product_a_name", ""))
-            name_b = str(row.get("product_b_name", ""))
-            family_a = _normalise_family_value(row.get("product_family_a", ""))
-            family_b = _normalise_family_value(row.get("product_family_b", ""))
-            if pid_a == pid_b or float(row.get("shared_categories_count", 0)) < 2:
+            if int(idx) in selected:
                 continue
-            if _is_non_food_product(name_a) or _is_non_food_product(name_b):
+            if not _is_valid(row):
                 continue
-            if _is_same_product_variant(name_a, name_b):
-                continue
-            if family_a and family_b and family_a == family_b:
-                continue
-            themes = _extract_themes(name_a, name_b, theme_tokens)
-            if themes & used_themes or pid_a in used_products or pid_b in used_products:
-                continue
-            selected.append(idx)
-            used_products.update([pid_a, pid_b])
-            used_themes.update(themes)
+            selected.append(int(idx))
+            used_products.update([int(row["product_a"]), int(row["product_b"])])
 
     result = df.loc[selected].reset_index(drop=True)
     result.index = result.index + 1

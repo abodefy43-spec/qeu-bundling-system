@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-
 import pandas as pd
 
 
@@ -14,6 +13,7 @@ class BundleViewData:
     kpis: dict[str, str]
     top10_rows: list[dict[str, object]]
     all_rows: list[dict[str, object]]
+    person_recommendations: list[dict[str, object]] | None = None
     data_warning: str = ""
 
 
@@ -55,6 +55,7 @@ def load_bundle_view(base_dir: Path, query: str = "") -> BundleViewData:
         kpis=kpis,
         top10_rows=_to_records(top10_df),
         all_rows=_to_records(final_df),
+        person_recommendations=_build_person_recommendations(base_dir, final_df, max_people=10),
         data_warning="",
     )
 
@@ -183,12 +184,153 @@ def _to_records(df: pd.DataFrame) -> list[dict[str, object]]:
         "discount_pred_c": "discount_c",
     }
     out = df[[c for c in cols if c in df.columns]].rename(columns=rename_map)
-    records = []
-    for _, row in out.iterrows():
-        rec = row.to_dict()
-        rec["bundle_items"] = _items_in_order(rec)
-        records.append(rec)
-    return records
+    return [_row_to_record(row) for _, row in out.iterrows()]
+
+
+def _row_to_record(row: pd.Series) -> dict[str, object]:
+    rec = row.to_dict()
+    rec["bundle_items"] = _items_in_order(rec)
+    return rec
+
+
+def _build_person_recommendations(
+    base_dir: Path, bundles_df: pd.DataFrame, max_people: int = 10
+) -> list[dict[str, object]]:
+    """Build sample shopper recommendations from order history.
+
+    Data has no customer_id, so each "Person N" is represented by one order history.
+    Recommendations use a hybrid score:
+    - 35% purchase-history overlap
+    - 50% bundle quality score (final_score)
+    - 15% copurchase strength (purchase_score)
+    """
+    if bundles_df.empty or max_people <= 0:
+        return []
+
+    orders_path = base_dir / "data" / "filtered_orders.pkl"
+    if not orders_path.exists():
+        return []
+    try:
+        orders = pd.read_pickle(orders_path)
+    except Exception:
+        return []
+
+    required = {"order_id", "product_id", "product_name"}
+    if orders.empty or not required.issubset(set(orders.columns)):
+        return []
+
+    orders = orders.copy()
+    orders["product_id"] = pd.to_numeric(orders["product_id"], errors="coerce")
+    orders = orders.dropna(subset=["product_id"])
+    if orders.empty:
+        return []
+    orders["product_id"] = orders["product_id"].astype(int)
+
+    order_product_map = orders.groupby("order_id")["product_id"].apply(set).to_dict()
+    order_name_map = orders.groupby("order_id").apply(
+        lambda x: dict(zip(x["product_id"], x["product_name"]))
+    ).to_dict()
+
+    order_sizes = (
+        orders.groupby("order_id")["product_id"]
+        .nunique()
+        .sort_values(ascending=False)
+    )
+    candidate_order_ids = order_sizes[order_sizes >= 2].head(max_people * 4).index.tolist()
+    if not candidate_order_ids:
+        return []
+    person_profiles: list[tuple[set[int], set[int], dict[int, str]]] = []
+    for oid in candidate_order_ids:
+        pids = order_product_map.get(oid, set())
+        if len(pids) < 2:
+            continue
+        names = order_name_map.get(oid, {})
+        person_profiles.append(({int(oid)}, set(pids), dict(names)))
+        if len(person_profiles) >= max_people:
+            break
+
+    if not person_profiles:
+        return []
+
+    scored_base = bundles_df.copy()
+    scored_base["product_a"] = pd.to_numeric(scored_base.get("product_a", -1), errors="coerce").fillna(-1).astype(int)
+    scored_base["product_b"] = pd.to_numeric(scored_base.get("product_b", -1), errors="coerce").fillna(-1).astype(int)
+    scored_base["product_c"] = pd.to_numeric(scored_base.get("product_c", -1), errors="coerce").fillna(-1).astype(int)
+    scored_base["final_score"] = pd.to_numeric(scored_base.get("final_score", 0.0), errors="coerce").fillna(0.0)
+    scored_base["purchase_score"] = pd.to_numeric(scored_base.get("purchase_score", 0.0), errors="coerce").fillna(0.0)
+
+    final_min, final_max = float(scored_base["final_score"].min()), float(scored_base["final_score"].max())
+    purchase_min, purchase_max = float(scored_base["purchase_score"].min()), float(scored_base["purchase_score"].max())
+    final_span = max(final_max - final_min, 1e-9)
+    purchase_span = max(purchase_max - purchase_min, 1e-9)
+    scored_base["quality_norm"] = (scored_base["final_score"] - final_min) / final_span
+    scored_base["purchase_norm"] = (scored_base["purchase_score"] - purchase_min) / purchase_span
+
+    recommendations: list[dict[str, object]] = []
+    used_bundle_keys: set[tuple[int, int, int]] = set()
+
+    for idx, (order_ids, history_ids, name_map) in enumerate(person_profiles, start=1):
+        if not history_ids:
+            continue
+        history_names = list(name_map.values())
+
+        scored = scored_base.copy()
+        scored["history_match_count"] = (
+            scored["product_a"].isin(history_ids).astype(int)
+            + scored["product_b"].isin(history_ids).astype(int)
+            + scored["product_c"].isin(history_ids).astype(int)
+        )
+        scored["history_match_ratio"] = scored["history_match_count"] / 2.0
+        scored["hybrid_reco_score"] = (
+            scored["history_match_ratio"] * 0.35
+            + scored["quality_norm"] * 0.50
+            + scored["purchase_norm"] * 0.15
+        )
+        scored = scored.sort_values(
+            ["hybrid_reco_score", "history_match_count", "final_score"],
+            ascending=[False, False, False],
+        )
+
+        best_row = None
+        for _, candidate in scored.iterrows():
+            key = (
+                int(candidate.get("product_a", -1)),
+                int(candidate.get("product_b", -1)),
+                int(candidate.get("product_c", -1)),
+            )
+            if key in used_bundle_keys:
+                continue
+            best_row = candidate
+            used_bundle_keys.add(key)
+            break
+
+        if best_row is None:
+            continue
+
+        rec = _row_to_record(best_row)
+        rec["person_label"] = f"Person {len(recommendations) + 1}"
+        rec["source_order_ids"] = sorted(order_ids)
+        rec["order_count"] = len(order_ids)
+        rec["history_items"] = history_names
+        rec["chosen_bundle_names"] = [
+            str(rec.get("product_a_name", "") or "").strip(),
+            str(rec.get("product_b_name", "") or "").strip(),
+        ] + (
+            [str(rec.get("product_c_name", "") or "").strip()]
+            if bool(rec.get("is_triple")) and str(rec.get("product_c_name", "") or "").strip()
+            else []
+        )
+        rec["history_match_count"] = int(best_row.get("history_match_count", 0))
+        rec["hybrid_reco_score"] = round(float(best_row.get("hybrid_reco_score", 0.0)), 3)
+        rec["recommendation_text"] = (
+            "This recommendation blends purchase history with overall bundle quality "
+            "and copurchase behavior (not history-only)."
+        )
+        recommendations.append(rec)
+        if len(recommendations) >= max_people:
+            break
+
+    return recommendations
 
 
 def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
