@@ -1,0 +1,2000 @@
+{
+  "metadata": {
+    "created": "2026-02-27",
+    "sources": [
+      "Saudi Government Food Security Statistics 2024",
+      "SpiceNest - Top Selling Grocery Products in Saudi Arabia",
+      "SalaamGateway - Saudi Ramadan Dishes",
+      "Arab News - Saudi Ramadan Dishes",
+      "Hungry Paprikas - 50+ Iftar Recipes",
+      "Property Finder - Ramadan Grocery List",
+      "Halalification - Ramadan Foods Middle East",
+      "Cook Smarts - Middle Eastern Pantry Staples"
+    ],
+    "total_ingredients": 220,
+    "total_recipes": 150,
+    "seasonal_periods": ["Ramadan 2025", "Ramadan 2026", "Year-round"],
+    "focus": "Saudi Arabia + Middle East"
+  },
+  "saudi_consumption_data": {
+    "per_capita_kg_per_year": {
+      "rice": 52,
+      "dates": 36,
+      "onions": 20.5,
+      "tomatoes": 19.56,
+      "potatoes": 15.59,
+      "bananas": 12,
+      "oranges": 12,
+      "coffee_beans": 2.96
+    },
+    "top_grocery_products_saudi": [
+      "dates",
+      "arabic_spices",
+      "almond_milk",
+      "frozen_samosas",
+      "chips",
+      "energy_bars",
+      "pasta",
+      "herbal_teas",
+      "organic_cereals",
+      "plant_based_meats"
+    ],
+    "top_dairy_products": [
+      "fresh_milk",
+      "long_life_milk",
+      "cheese",
+      "butter"
+    ],
+    "top_beverages": [
+      "juice",
+      "soft_drinks",
+      "bottled_water",
+      "fresh_fruit_juices",
+      "coconut_water",
+      "vimto",
+      "qamar_al_din"
+    ]
+  },
+  "saudi_ramadan_dishes": {
+    "kabsa": {
+      "ar": "كبسة",
+      "description": "Saudi national dish - spiced rice with chicken or lamb",
+      "key_ingredients": ["rice", "chicken", "lamb", "onions", "tomatoes", "garlic", "carrots", "dried_lime", "cardamom", "cumin", "cinnamon", "bay_leaves", "nutmeg", "ghee", "raisins", "almonds"],
+      "importance": 100,
+      "region": "Saudi Arabia"
+    },
+    "jareesh": {
+      "ar": "جريش",
+      "description": "Saudi national dish - cracked wheat with meat",
+      "key_ingredients": ["cracked_wheat", "lamb", "onions", "tomatoes", "ghee", "salt", "cardamom"],
+      "importance": 95,
+      "region": "Saudi Arabia"
+    },
+    "saleeg": {
+      "ar": "صليع",
+      "description": "Rice cooked with milk - creamy Saudi dish",
+      "key_ingredients": ["rice", "milk", "ghee", "cardamom", "salt"],
+      "importance": 92,
+      "region": "Saudi Arabia"
+    },
+    "matazeez": {
+      "ar": "مطازيذ",
+      "description": "Whole wheat dough circles in tomato sauce with meat",
+      "key_ingredients": ["whole_wheat", "tomatoes", "onions", "meat", "tomato_paste", "garlic", "spices"],
+      "importance": 90,
+      "region": "Saudi Arabia"
+    },
+    "samboosa": {
+      "ar": "سمبوسا",
+      "description": "Deep-fried pastry with meat or cheese - Saudi Ramadan favorite",
+      "key_ingredients": ["flour", "chicken", "lamb", "cheese", "onions", "spices", "vegetable_oil"],
+      "importance": 98,
+      "region": "Saudi Arabia"
+    },
+    "quaker_soup": {
+      "ar": "شوربة كويكر",
+      "description": "Quaker soup - most popular soup in Saudi during Ramadan",
+      "key_ingredients": ["oats", "chicken", "lamb", "onions", "carrots", "celery", "garlic", "spices"],
+      "importance": 95,
+      "region": "Saudi Arabia"
+    },
+    "vimto": {
+      "ar": "فيمتو",
+      "description": "Popular Saudi Ramadan drink - berry and vanilla flavored",
+      "key_ingredients": ["vimto_concentrate", "water", "sugar"],
+      "importance": 100,
+      "region": "Saudi Arabia"
+    },
+    "qamar_al_din": {
+      "ar": "قمر الدين",
+      "description": "Apricot juice - traditional Ramadan beverage",
+      "key_ingredients": ["dried_apricots", "water", "sugar"],
+      "importance": 90,
+      "region": "Saudi Arabia"
+    },
+    "laban": {
+      "ar": "لبن",
+      "description": "Buttermilk drink - essential for iftar",
+      "key_ingredients": ["yogurt", "water", "salt", "mint"],
+      "importance": 95,
+      "region": "Saudi Arabia"
+    },
+    "saudi_coffee": {
+      "ar": "قهوة السعودية",
+      "description": "Saudi Arabic coffee with cardamom",
+      "key_ingredients": ["coffee_beans", "cardamom", "saffron", "water", "sugar"],
+      "importance": 85,
+      "region": "Saudi Arabia"
+    },
+    "chocolate_biscuit_dessert": {
+      "ar": "حلوى بسكويت الشوكولاتة",
+      "description": "Tea biscuits soaked in chocolate - popular Saudi dessert",
+      "key_ingredients": ["tea_biscuits", "cocoa", "milk", "sugar", "butter"],
+      "importance": 75,
+      "region": "Saudi Arabia"
+    }
+  },
+  "ingredients": {
+    "dates": {
+      "ar": "تمور",
+      "en": "dates",
+      "category": "fruits",
+      "subcategory": "dried_fruits",
+      "recipe_count": 55,
+      "saudi_annual_consumption_kg": 36,
+      "recipes": ["iftar_traditional", "dates_water", "ramadan_starter", "qatayef", "baklava", "kunafa", "date_smoothie", "stuffed_dates"],
+      "seasonal_relevance": {
+        "ramadan_2025": 100,
+        "ramadan_2026": 100,
+        "year_round": 80
+      },
+      "product_types": ["medjool_dates", "deglet_noor_dates", "ajwa_dates", "sukkari_dates", "dried_dates", "date_paste", "date_syrup"],
+      "qeu_relevance": 100,
+      "saudi_importance": "critical"
+    },
+    "rice": {
+      "ar": "أرز",
+      "en": "rice",
+      "category": "grains",
+      "subcategory": "rice",
+      "recipe_count": 65,
+      "saudi_annual_consumption_kg": 52,
+      "recipes": ["kabsa", "biryani", "machboos", "mandi", "maqluba", "quzi", "fried_rice", "rice_salad", "stuffed_peppers", "jareesh", "saleeg"],
+      "seasonal_relevance": {
+        "ramadan_2025": 100,
+        "ramadan_2026": 100,
+        "year_round": 100
+      },
+      "product_types": ["basmati_rice", "jasmine_rice", "white_rice", "brown_rice", "long_grain_rice", "short_grain_rice"],
+      "qeu_relevance": 100,
+      "saudi_importance": "critical"
+    },
+    "chicken": {
+      "ar": "دجاج",
+      "en": "chicken",
+      "category": "protein",
+      "subcategory": "poultry",
+      "recipe_count": 58,
+      "recipes": ["kabsa", "shawarma", "grilled_chicken", "biryani", "machboos", "roasted_chicken", "chicken_soup", "shish_tawook", "samboosa", "quaker_soup"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 90
+      },
+      "product_types": ["whole_chicken", "chicken_legs", "chicken_breast", "chicken_thighs", "chicken_wings", "minced_chicken"],
+      "qeu_relevance": 95,
+      "saudi_importance": "very_high"
+    },
+    "lamb": {
+      "ar": "لحم ضأن",
+      "en": "lamb",
+      "category": "protein",
+      "subcategory": "red_meat",
+      "recipe_count": 45,
+      "recipes": ["kabsa", "jareesh", "matazeez", "quker_soup", "shawarma", "grilled_lamb", "lamb_stew"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 75
+      },
+      "product_types": ["lamb_legs", "lamb_chops", "ground_lamb", "lamb_stew_meat", "lamb_boneless"],
+      "qeu_relevance": 85,
+      "saudi_importance": "very_high"
+    },
+    "onions": {
+      "ar": "بصل",
+      "en": "onions",
+      "category": "vegetables",
+      "subcategory": "allium",
+      "recipe_count": 75,
+      "saudi_annual_consumption_kg": 20.5,
+      "recipes": ["soups", "stews", "rice_dishes", "meat_dishes", "sauces", "salads", "fried_onions", "kabsa", "jareesh", "matazeez"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 95
+      },
+      "product_types": ["white_onions", "red_onions", "spring_onions", "dried_onions", "onion_powder"],
+      "qeu_relevance": 90,
+      "saudi_importance": "critical"
+    },
+    "tomatoes": {
+      "ar": "طماطم",
+      "en": "tomatoes",
+      "category": "vegetables",
+      "subcategory": "tomatoes",
+      "recipe_count": 68,
+      "saudi_annual_consumption_kg": 19.56,
+      "recipes": ["soups", "stews", "salads", "sauces", "rice_dishes", "sambousek", "dolma", "kabsa", "matazeez"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 90
+      },
+      "product_types": ["fresh_tomatoes", "tomato_paste", "canned_tomatoes", "cherry_tomatoes", "tomato_sauce"],
+      "qeu_relevance": 88,
+      "saudi_importance": "critical"
+    },
+    "potatoes": {
+      "ar": "بطاطس",
+      "en": "potatoes",
+      "category": "vegetables",
+      "subcategory": "tubers",
+      "recipe_count": 55,
+      "saudi_annual_consumption_kg": 15.59,
+      "recipes": ["fried_potatoes", "roasted_vegetables", "moussaka", "maqluba", "soups", "salads", "kabsa"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 85
+      },
+      "product_types": ["white_potatoes", "baby_potatoes", "frozen_fries", "potato_chips"],
+      "qeu_relevance": 80,
+      "saudi_importance": "very_high"
+    },
+    "bananas": {
+      "ar": "موز",
+      "en": "bananas",
+      "category": "fruits",
+      "subcategory": "tropical_fruits",
+      "recipe_count": 25,
+      "saudi_annual_consumption_kg": 12,
+      "recipes": ["smoothies", "fruit_salads", "snacks", "breakfast", "cakes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 85
+      },
+      "product_types": ["ripe_bananas", "green_bananas", "banana_chips", "frozen_bananas"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "oranges": {
+      "ar": "برتقال",
+      "en": "oranges",
+      "category": "fruits",
+      "subcategory": "citrus",
+      "recipe_count": 22,
+      "saudi_annual_consumption_kg": 12,
+      "recipes": ["juices", "fruit_salads", "desserts", "snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 80
+      },
+      "product_types": ["navel_oranges", "valencia_oranges", "orange_juice", "dried_orange"],
+      "qeu_relevance": 70,
+      "saudi_importance": "high"
+    },
+    "coffee_beans": {
+      "ar": "حبوب القهوة",
+      "en": "coffee beans",
+      "category": "beverages",
+      "subcategory": "coffee",
+      "recipe_count": 18,
+      "saudi_annual_consumption_kg": 2.96,
+      "recipes": ["saudi_coffee", "espresso", "cappuccino", "cold_brew", "iced_coffee"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 90
+      },
+      "product_types": ["arabica_coffee", "robusta_coffee", "coffee_beans_roasted", "instant_coffee", "nescafe"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "bread": {
+      "ar": "خبز",
+      "en": "bread",
+      "category": "grains",
+      "subcategory": "bread",
+      "recipe_count": 58,
+      "recipes": ["pita", "manakish", "fatayer", "sambousek", "fattoush", "sandwiches", "appetizers", "saudi_bread"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 98
+      },
+      "product_types": ["pita_bread", "arabic_bread", "white_bread", "whole_wheat_bread", "tortilla", "saudi_ragag", "khubz_ragag"],
+      "qeu_relevance": 92,
+      "saudi_importance": "critical"
+    },
+    "flour": {
+      "ar": "دقيق",
+      "en": "flour",
+      "category": "grains",
+      "subcategory": "flour",
+      "recipe_count": 52,
+      "recipes": ["breads", "desserts", "baking", "coating", "sauces", "batter", "samboosa_dough", " pastries"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 92
+      },
+      "product_types": ["white_flour", "whole_wheat_flour", "bread_flour", "pastry_flour", "cake_flour", "semolina"],
+      "qeu_relevance": 85,
+      "saudi_importance": "very_high"
+    },
+    "vegetable_oil": {
+      "ar": "زيت نباتي",
+      "en": "vegetable oil",
+      "category": "oils",
+      "subcategory": "cooking_oils",
+      "recipe_count": 60,
+      "recipes": ["frying", "cooking", "baking", "dressings", "sauces"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 95
+      },
+      "product_types": ["vegetable_oil", "canola_oil", "sunflower_oil", "corn_oil", "soybean_oil", "rice_brand_oil"],
+      "qeu_relevance": 88,
+      "saudi_importance": "critical"
+    },
+    "ghee": {
+      "ar": "سمن",
+      "en": "ghee",
+      "category": "oils",
+      "subcategory": "clarified_butter",
+      "recipe_count": 50,
+      "recipes": ["rice_dishes", "breads", "desserts", "cooking", "frying", "kabsa", "jareesh", "saleeg"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 85
+      },
+      "product_types": ["ghee", "clarified_butter", "ghee_pure", "desi_ghee"],
+      "qeu_relevance": 88,
+      "saudi_importance": "very_high"
+    },
+    "olive_oil": {
+      "ar": "زيت زيتون",
+      "en": "olive oil",
+      "category": "oils",
+      "subcategory": "cooking_oils",
+      "recipe_count": 55,
+      "recipes": ["salads", "dips", "dressings", "cooking", "marinades", "breads"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 85
+      },
+      "product_types": ["extra_virgin_olive_oil", "pure_olive_oil", "olive_oil_spray", "pomace_olive_oil"],
+      "qeu_relevance": 80,
+      "saudi_importance": "high"
+    },
+    "yogurt": {
+      "ar": "زبادي",
+      "en": "yogurt",
+      "category": "dairy",
+      "subcategory": "dairy_products",
+      "recipe_count": 52,
+      "recipes": ["dips", "sauces", "soups", "marinades", "desserts", "drinks", "salads", "labneh", "laban", "smoothies"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 90
+      },
+      "product_types": ["plain_yogurt", "greek_yogurt", "labneh", "yogurt_drink", "flavored_yogurt", "saudi_laban"],
+      "qeu_relevance": 88,
+      "saudi_importance": "critical"
+    },
+    "milk": {
+      "ar": "حليب",
+      "en": "milk",
+      "category": "dairy",
+      "subcategory": "dairy_products",
+      "recipe_count": 45,
+      "recipes": ["drinks", "desserts", "baking", "cooking", "cereals", "saleeg", "chocolate_dessert", "milkshakes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 95
+      },
+      "product_types": ["full_cream_milk", "skim_milk", "long_life_milk", "evaporated_milk", "condensed_milk", "powdered_milk", "almond_milk"],
+      "qeu_relevance": 85,
+      "saudi_importance": "critical"
+    },
+    "cheese": {
+      "ar": "جبن",
+      "en": "cheese",
+      "category": "dairy",
+      "subcategory": "cheese",
+      "recipe_count": 48,
+      "recipes": ["appetizers", "desserts", "sandwiches", "salads", "baking", "pasta", "samboosa_cheese", "pizza"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 88
+      },
+      "product_types": ["feta_cheese", "white_cheese", "cream_cheese", "mozzarella", "cheddar", "kiri_cheese", "la_vache_qui_rit", "processed_cheese"],
+      "qeu_relevance": 85,
+      "saudi_importance": "very_high"
+    },
+    "butter": {
+      "ar": "زبدة",
+      "en": "butter",
+      "category": "dairy",
+      "subcategory": "dairy_products",
+      "recipe_count": 42,
+      "recipes": ["baking", "cooking", "bread", "desserts", "sauces", "chocolate_dessert"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 88
+      },
+      "product_types": ["unsalted_butter", "salted_butter", "clarified_butter", "whipped_butter"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "eggs": {
+      "ar": "بيض",
+      "en": "eggs",
+      "category": "protein",
+      "subcategory": "eggs",
+      "recipe_count": 55,
+      "recipes": ["breakfast", "baking", "cooking", "desserts", "sauces", "soups", "omelets", "custards"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 95
+      },
+      "product_types": ["chicken_eggs", "quail_eggs", "egg_whites", "egg_yolks", "liquid_eggs"],
+      "qeu_relevance": 88,
+      "saudi_importance": "critical"
+    },
+    "lentils": {
+      "ar": "عدس",
+      "en": "lentils",
+      "category": "legumes",
+      "subcategory": "lentils",
+      "recipe_count": 48,
+      "recipes": ["lentil_soup", "harira", "mujadara", "koshari", "dal", "ramadan_lentil_dishes", "salads"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 80
+      },
+      "product_types": ["red_lentils", "brown_lentils", "green_lentils", "yellow_lentils", "black_lentils"],
+      "qeu_relevance": 90,
+      "saudi_importance": "very_high"
+    },
+    "chickpeas": {
+      "ar": "حمص",
+      "en": "chickpeas",
+      "category": "legumes",
+      "subcategory": "chickpeas",
+      "recipe_count": 52,
+      "recipes": ["hummus", "falafel", "fatayer", "harira", "salads", "stews", "fattet_hummus", "chickpea_curry"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 82
+      },
+      "product_types": ["dried_chickpeas", "canned_chickpeas", "cooked_chickpeas", "frozen_falafel"],
+      "qeu_relevance": 88,
+      "saudi_importance": "very_high"
+    },
+    "beans": {
+      "ar": "فاصوليا",
+      "en": "beans",
+      "category": "legumes",
+      "subcategory": "beans",
+      "recipe_count": 35,
+      "recipes": ["fasolia", "bean_salads", "stews", "soups", "kidney_beans", "lobiya"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 75
+      },
+      "product_types": ["kidney_beans", "white_beans", "black_beans", "red_beans", "canned_beans"],
+      "qeu_relevance": 72,
+      "saudi_importance": "medium"
+    },
+    "garlic": {
+      "ar": "ثوم",
+      "en": "garlic",
+      "category": "vegetables",
+      "subcategory": "allium",
+      "recipe_count": 65,
+      "recipes": ["marinades", "sauces", "soups", "stews", "rice_dishes", "meat_dishes", "dips", "kabsa", "jareesh"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 92
+      },
+      "product_types": ["fresh_garlic", "garlic_paste", "dried_garlic", "garlic_powder", "minced_garlic"],
+      "qeu_relevance": 85,
+      "saudi_importance": "critical"
+    },
+    "carrots": {
+      "ar": "جزر",
+      "en": "carrots",
+      "category": "vegetables",
+      "subcategory": "root_vegetables",
+      "recipe_count": 42,
+      "recipes": ["soups", "stews", "salads", "rice_dishes", "desserts", "cakes", "juices", "quaker_soup"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 82
+      },
+      "product_types": ["fresh_carrots", "baby_carrots", "shredded_carrots", "frozen_carrots"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "cucumber": {
+      "ar": "خيار",
+      "en": "cucumber",
+      "category": "vegetables",
+      "subcategory": "cucumbers",
+      "recipe_count": 32,
+      "recipes": ["salads", "yogurt_dips", "fattoush", "jajik", "pickles", "snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 80
+      },
+      "product_types": ["fresh_cucumber", "pickling_cucumber", "english_cucumber"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "lettuce": {
+      "ar": "خس",
+      "en": "lettuce",
+      "category": "vegetables",
+      "subcategory": "leafy_greens",
+      "recipe_count": 25,
+      "recipes": ["salads", "sandwiches", "wraps", "fattoush"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 75
+      },
+      "product_types": ["romaine_lettuce", "iceberg_lettuce", "local_lettuce", "baby_lettuce"],
+      "qeu_relevance": 68,
+      "saudi_importance": "medium"
+    },
+    "bell_peppers": {
+      "ar": "فلفل",
+      "en": "bell peppers",
+      "category": "vegetables",
+      "subcategory": "nightshades",
+      "recipe_count": 35,
+      "recipes": ["stuffed_peppers", "salads", "rice_dishes", "grilled_peppers", "fajitas"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 75
+      },
+      "product_types": ["green_peppers", "red_peppers", "yellow_peppers", "mixed_peppers", "frozen_peppers"],
+      "qeu_relevance": 68,
+      "saudi_importance": "medium"
+    },
+    "eggplant": {
+      "ar": "باذنجان",
+      "en": "eggplant",
+      "category": "vegetables",
+      "subcategory": "nightshades",
+      "recipe_count": 38,
+      "recipes": ["baba_ganoush", "moussaka", "stuffed_eggplant", "maqluba", "grilled_eggplant", "imam_bayildi"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 78
+      },
+      "product_types": ["fresh_eggplant", "chinese_eggplant", "baby_eggplant", "frozen_eggplant"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "dried_lime": {
+      "ar": "ليم ناشف",
+      "en": "dried lime",
+      "category": "condiments",
+      "subcategory": "dried_limes",
+      "recipe_count": 22,
+      "recipes": ["soups", "stews", "rice_dishes", "kabsa", "chicken_dishes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 70
+      },
+      "product_types": ["dried_lime", "lime_powder", "lemon_lime_dried"],
+      "qeu_relevance": 80,
+      "saudi_importance": "very_high"
+    },
+    "cardamom": {
+      "ar": "هيل",
+      "en": "cardamom",
+      "category": "spices",
+      "subcategory": "warm_spices",
+      "recipe_count": 45,
+      "recipes": ["rice_dishes", "desserts", "drinks", "coffee", "chai", "saudi_coffee", "kabsa", "jareesh"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 85
+      },
+      "product_types": ["green_cardamom", "black_cardamom", "ground_cardamom", "cardamom_pods"],
+      "qeu_relevance": 90,
+      "saudi_importance": "critical"
+    },
+    "cumin": {
+      "ar": "كمون",
+      "en": "cumin",
+      "category": "spices",
+      "subcategory": "ground_spices",
+      "recipe_count": 58,
+      "recipes": ["rice_dishes", "soups", "stews", "meat_dishes", "legume_dishes", "marinades", "kabsa", "curries"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 90
+      },
+      "product_types": ["cumin_seeds", "ground_cumin", "cumin_powder", "cumino"],
+      "qeu_relevance": 88,
+      "saudi_importance": "critical"
+    },
+    "cinnamon": {
+      "ar": "قرفة",
+      "en": "cinnamon",
+      "category": "spices",
+      "subcategory": "warm_spices",
+      "recipe_count": 45,
+      "recipes": ["rice_dishes", "desserts", "stews", "drinks", "baking", "saudi_coffee", "kabsa"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 75
+      },
+      "product_types": ["cinnamon_sticks", "ground_cinnamon", "ceylon_cinnamon"],
+      "qeu_relevance": 82,
+      "saudi_importance": "very_high"
+    },
+    "turmeric": {
+      "ar": "كركم",
+      "en": "turmeric",
+      "category": "spices",
+      "subcategory": "ground_spices",
+      "recipe_count": 42,
+      "recipes": ["rice_dishes", "soups", "stews", "curries", "marinades", "golden_milk", "kabsa"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 80
+      },
+      "product_types": ["ground_turmeric", "fresh_turmeric", "turmeric_powder"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "bay_leaves": {
+      "ar": "ورق الغار",
+      "en": "bay leaves",
+      "category": "spices",
+      "subcategory": "herbs_spices",
+      "recipe_count": 35,
+      "recipes": ["soups", "stews", "rice_dishes", "meat_dishes", "sauces", "kabsa", "chicken_dishes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 80
+      },
+      "product_types": ["bay_leaves", "dried_bay_leaves", "indian_bay_leaves"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "saffron": {
+      "ar": "زعفران",
+      "en": "saffron",
+      "category": "spices",
+      "subcategory": "premium_spices",
+      "recipe_count": 25,
+      "recipes": ["rice_dishes", "desserts", "drinks", "saudi_coffee", "kabsa", "ice_cream"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 60
+      },
+      "product_types": ["saffron_threads", "saffron_powder", "saffron_strands"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "sumac": {
+      "ar": "سماق",
+      "en": "sumac",
+      "category": "spices",
+      "subcategory": "middle_eastern_spices",
+      "recipe_count": 30,
+      "recipes": ["fattoush", "salads", "marinades", "rice_dishes", "appetizers", "zaatar_blend"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 70
+      },
+      "product_types": ["ground_sumac", "sumac_spice", "sumac_powder"],
+      "qeu_relevance": 70,
+      "saudi_importance": "high"
+    },
+    "zaatar": {
+      "ar": "زعتر",
+      "en": "za'atar",
+      "category": "spices",
+      "subcategory": "middle_eastern_spices",
+      "recipe_count": 28,
+      "recipes": ["manakish", "salads", "marinades", "dips", "bread", "fatayer"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 75
+      },
+      "product_types": ["zaatar_spice", "zaatar_blend", "zaatar_oil", "dried_zaatar"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "baharat": {
+      "ar": "بهارات",
+      "en": "baharat",
+      "category": "spices",
+      "subcategory": "blend_spices",
+      "recipe_count": 35,
+      "recipes": ["rice_dishes", "meat_dishes", "stews", "soups", "kabsa", "grilled_meats"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 75
+      },
+      "product_types": ["baharat_blend", "baharat_spice", "gulf_baharat"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "black_pepper": {
+      "ar": "فلفل أسود",
+      "en": "black pepper",
+      "category": "spices",
+      "subcategory": "ground_spices",
+      "recipe_count": 60,
+      "recipes": ["soups", "stews", "rice_dishes", "meat_dishes", "vegetables", "sauces", "marinades"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 92
+      },
+      "product_types": ["whole_black_pepper", "ground_black_pepper", "pepper_corns"],
+      "qeu_relevance": 85,
+      "saudi_importance": "critical"
+    },
+    "salt": {
+      "ar": "ملح",
+      "en": "salt",
+      "category": "spices",
+      "subcategory": "seasonings",
+      "recipe_count": 70,
+      "recipes": ["all_recipes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 98
+      },
+      "product_types": ["table_salt", "sea_salt", "kosher_salt", "rock_salt", "himalayan_salt"],
+      "qeu_relevance": 92,
+      "saudi_importance": "critical"
+    },
+    "sugar": {
+      "ar": "ázar",
+      "en": "sugar",
+      "category": "baking",
+      "subcategory": "sweeteners",
+      "recipe_count": 48,
+      "recipes": ["desserts", "drinks", "baking", "preserves", "syrups", "vimto", "qamar_al_din", "saudi_coffee"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 92
+      },
+      "product_types": ["white_sugar", "brown_sugar", "powdered_sugar", "date_sugar", "caster_sugar"],
+      "qeu_relevance": 85,
+      "saudi_importance": "critical"
+    },
+    "honey": {
+      "ar": "عسل",
+      "en": "honey",
+      "category": "baking",
+      "subcategory": "sweeteners",
+      "recipe_count": 40,
+      "recipes": ["desserts", "drinks", "marinades", "baking", "sweeteners", "tea"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 80
+      },
+      "product_types": ["raw_honey", "pure_honey", "flavored_honey", "sidr_honey"],
+      "qeu_relevance": 82,
+      "saudi_importance": "very_high"
+    },
+    "cocoa": {
+      "ar": "كاكاو",
+      "en": "cocoa",
+      "category": "baking",
+      "subcategory": "baking_ingredients",
+      "recipe_count": 25,
+      "recipes": ["desserts", "cakes", "drinks", "chocolate_dishes", "chocolate_biscuit_dessert"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 75
+      },
+      "product_types": ["cocoa_powder", "dutch_cocoa", "cocoa_mass", "chocolate_chips"],
+      "qeu_relevance": 68,
+      "saudi_importance": "medium"
+    },
+    "tea": {
+      "ar": "شاي",
+      "en": "tea",
+      "category": "beverages",
+      "subcategory": "tea",
+      "recipe_count": 35,
+      "recipes": ["hot_tea", "iced_tea", "milk_tea", "herbal_tea", "saudi_tea", "mint_tea"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 95
+      },
+      "product_types": ["black_tea", "green_tea", "herbal_tea", "mint_tea", "lipton_tea", "tea_bags"],
+      "qeu_relevance": 90,
+      "saudi_importance": "critical"
+    },
+    "almonds": {
+      "ar": "لوز",
+      "en": "almonds",
+      "category": "nuts",
+      "subcategory": "nuts",
+      "recipe_count": 35,
+      "recipes": ["desserts", "rice_dishes", "garnishes", "snacks", "baking", "kabsa", "cakes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 80
+      },
+      "product_types": ["whole_almonds", "almond_slices", "almond_paste", "almond_flour", "blanched_almonds"],
+      "qeu_relevance": 82,
+      "saudi_importance": "very_high"
+    },
+    "pistachios": {
+      "ar": "فستق",
+      "en": "pistachios",
+      "category": "nuts",
+      "subcategory": "nuts",
+      "recipe_count": 28,
+      "recipes": ["desserts", "rice_dishes", "garnishes", "kunafa", "baklava", "ice_cream"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 70
+      },
+      "product_types": ["pistachios", "pistachio_paste", "ground_pistachios", "roasted_pistachios"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "raisins": {
+      "ar": "زبيب",
+      "en": "raisins",
+      "category": "fruits",
+      "subcategory": "dried_fruits",
+      "recipe_count": 28,
+      "recipes": ["rice_dishes", "desserts", "baking", "salads", "kabsa", "stuffings"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 70
+      },
+      "product_types": ["raisins", "golden_raisins", "sultanas", "dried_cranberries"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "tomato_paste": {
+      "ar": "معجون طماطم",
+      "en": "tomato paste",
+      "category": "canned_goods",
+      "subcategory": "tomato_products",
+      "recipe_count": 55,
+      "recipes": ["soups", "stews", "rice_dishes", "sauces", "meat_dishes", "kabsa", "matazeez"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 88
+      },
+      "product_types": ["tomato_paste", "double_concentrate", "triple_concentrate", "tomato_sauce"],
+      "qeu_relevance": 88,
+      "saudi_importance": "critical"
+    },
+    "pasta": {
+      "ar": "مكرونة",
+      "en": "pasta",
+      "category": "grains",
+      "subcategory": "pasta",
+      "recipe_count": 35,
+      "recipes": ["pasta_sauce", "pasta_salad", "macaroni", "spaghetti", "penne", "lasagna"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 85
+      },
+      "product_types": ["spaghetti", "penne", "macaroni", "fettuccine", "lasagna_sheets", "instant_noodles"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "vimto": {
+      "ar": "فيمتو",
+      "en": "vimto",
+      "category": "beverages",
+      "subcategory": "soft_drinks",
+      "recipe_count": 8,
+      "recipes": ["vimto_drink", "ramadan_drink"],
+      "seasonal_relevance": {
+        "ramadan_2025": 100,
+        "ramadan_2026": 100,
+        "year_round": 40
+      },
+      "product_types": ["vimto_concentrate", "vimto_bottled", "vimto_powder"],
+      "qeu_relevance": 95,
+      "saudi_importance": "critical"
+    },
+    "labneh": {
+      "ar": "لبنة",
+      "en": "labneh",
+      "category": "dairy",
+      "subcategory": "dairy_products",
+      "recipe_count": 25,
+      "recipes": ["dips", "appetizers", "breakfast", "sandwiches", "desserts", "laban"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 75
+      },
+      "product_types": ["labneh", "labneh_dip", "labneh_balls", "strained_yogurt"],
+      "qeu_relevance": 78,
+      "saudi_importance": "very_high"
+    },
+    "parsley": {
+      "ar": "بقدونس",
+      "en": "parsley",
+      "category": "herbs",
+      "subcategory": "fresh_herbs",
+      "recipe_count": 52,
+      "recipes": ["tabbouleh", "salads", "garnishes", "sauces", "rice_dishes", "meat_dishes", "soups"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 88
+      },
+      "product_types": ["fresh_parsley", "dried_parsley", "parsley_leaves", "flat_leaf_parsley"],
+      "qeu_relevance": 82,
+      "saudi_importance": "high"
+    },
+    "mint": {
+      "ar": "نعناع",
+      "en": "mint",
+      "category": "herbs",
+      "subcategory": "fresh_herbs",
+      "recipe_count": 30,
+      "recipes": ["drinks", "salads", "dips", "sauces", "desserts", "tea", "laban", "jallab"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 85
+      },
+      "product_types": ["fresh_mint", "dried_mint", "mint_leaves", "spearmint"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "lemon": {
+      "ar": "ليمون",
+      "en": "lemon",
+      "category": "fruits",
+      "subcategory": "citrus",
+      "recipe_count": 48,
+      "recipes": ["salad_dressings", "marinades", "sauces", "drinks", "soups", "rice_dishes", "desserts"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 88
+      },
+      "product_types": ["fresh_lemon", "lemon_juice", "lemon_concentrate", "dried_lemon"],
+      "qeu_relevance": 80,
+      "saudi_importance": "high"
+    },
+    "cracked_wheat": {
+      "ar": "جريش",
+      "en": "cracked wheat",
+      "category": "grains",
+      "subcategory": "wheat",
+      "recipe_count": 15,
+      "recipes": ["jareesh", "cracked_wheat_salad", "stuffing"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 60
+      },
+      "product_types": ["cracked_wheat", "bulgur", "burghul"],
+      "qeu_relevance": 85,
+      "saudi_importance": "very_high"
+    },
+    "whole_wheat": {
+      "ar": "قمح كامل",
+      "en": "whole wheat",
+      "category": "grains",
+      "subcategory": "wheat",
+      "recipe_count": 18,
+      "recipes": ["matazeez", "bread", "desserts", "traditional_dishes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 65
+      },
+      "product_types": ["whole_wheat_flour", "whole_wheat_bread", "wheat_grains"],
+      "qeu_relevance": 72,
+      "saudi_importance": "medium"
+    },
+    "semolina": {
+      "ar": "سميد",
+      "en": "semolina",
+      "category": "grains",
+      "subcategory": "wheat",
+      "recipe_count": 22,
+      "recipes": ["desserts", "cakes", "bread", "halwa", "kunafa_base"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 70
+      },
+      "product_types": ["semolina", "fine_semolina", "coarse_semolina", "durum_wheat"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "tahini": {
+      "ar": "طحينة",
+      "en": "tahini",
+      "category": "condiments",
+      "subcategory": "paste",
+      "recipe_count": 28,
+      "recipes": ["hummus", "salad_dressings", "dips", "marinades", "sauces", "halva"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 75
+      },
+      "product_types": ["tahini_paste", "tahini_sauce", "tahini_raw"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "pomegranate_molasses": {
+      "ar": "دبس الرمان",
+      "en": "pomegranate molasses",
+      "category": "condiments",
+      "subcategory": "sweet_sauces",
+      "recipe_count": 22,
+      "recipes": ["salad_dressings", "marinades", "sauces", "desserts", "fattoush"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 65
+      },
+      "product_types": ["pomegranate_molasses", "pomegranate_syrup", "pomegranate_discount"],
+      "qeu_relevance": 65,
+      "saudi_importance": "medium"
+    },
+    "vinegar": {
+      "ar": "خل",
+      "en": "vinegar",
+      "category": "condiments",
+      "subcategory": "condiments",
+      "recipe_count": 28,
+      "recipes": ["dressings", "marinades", "pickles", "sauces", " Salad"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 78
+      },
+      "product_types": ["white_vinegar", "apple_cider_vinegar", "red_wine_vinegar", "rice_vinegar"],
+      "qeu_relevance": 68,
+      "saudi_importance": "medium"
+    },
+    "corn_starch": {
+      "ar": "نشا ذرة",
+      "en": "corn starch",
+      "category": "baking",
+      "subcategory": "baking_ingredients",
+      "recipe_count": 18,
+      "recipes": ["sauces", "desserts", "baking", "thickening", "custards"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 68
+      },
+      "product_types": ["corn_starch", "corn_flour", "tapioca_starch"],
+      "qeu_relevance": 55,
+      "saudi_importance": "low"
+    },
+    "yeast": {
+      "ar": "خميرة",
+      "en": "yeast",
+      "category": "baking",
+      "subcategory": "baking_ingredients",
+      "recipe_count": 22,
+      "recipes": ["breads", "desserts", "pizza_dough", "pastries"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 75
+      },
+      "product_types": ["active_dry_yeast", "instant_yeast", "fresh_yeast", "yeast_flakes"],
+      "qeu_relevance": 62,
+      "saudi_importance": "medium"
+    },
+    "baking_powder": {
+      "ar": "بيكنج بودر",
+      "en": "baking powder",
+      "category": "baking",
+      "subcategory": "baking_ingredients",
+      "recipe_count": 18,
+      "recipes": ["breads", "desserts", "cakes", "cookies", "pastries"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 75
+      },
+      "product_types": ["baking_powder", "baking_soda", "cream_of_tartar"],
+      "qeu_relevance": 60,
+      "saudi_importance": "medium"
+    },
+    "vanilla": {
+      "ar": "فانيليا",
+      "en": "vanilla",
+      "category": "flavorings",
+      "subcategory": "flavoring_extracts",
+      "recipe_count": 25,
+      "recipes": ["desserts", "baking", "drinks", "custards", "ice_cream", "cakes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 75
+      },
+      "product_types": ["vanilla_extract", "vanilla_powder", "vanilla_beans", "vanilla_essence"],
+      "qeu_relevance": 65,
+      "saudi_importance": "medium"
+    },
+    "rosewater": {
+      "ar": "ماء الورد",
+      "en": "rosewater",
+      "category": "flavorings",
+      "subcategory": "floral_water",
+      "recipe_count": 25,
+      "recipes": ["desserts", "drinks", "baking", "sweeteners", "kunafa", "baklava"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 60
+      },
+      "product_types": ["rosewater", "rose_water_pure", "rose_water_food_grade"],
+      "qeu_relevance": 70,
+      "saudi_importance": "high"
+    },
+    "orange_blossom_water": {
+      "ar": "ماء الزهر",
+      "en": "orange blossom water",
+      "category": "flavorings",
+      "subcategory": "floral_water",
+      "recipe_count": 20,
+      "recipes": ["desserts", "drinks", "baking", "pastries"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 55
+      },
+      "product_types": ["orange_blossom_water", "mazahar"],
+      "qeu_relevance": 62,
+      "saudi_importance": "medium"
+    },
+    "cream": {
+      "ar": "كريمة",
+      "en": "cream",
+      "category": "dairy",
+      "subcategory": "dairy_products",
+      "recipe_count": 22,
+      "recipes": ["desserts", "sauces", "soups", "baking", "coffee", "ice_cream"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 78
+      },
+      "product_types": ["heavy_cream", "whipping_cream", "sour_cream", "evaporated_cream"],
+      "qeu_relevance": 70,
+      "saudi_importance": "high"
+    },
+    "walnuts": {
+      "ar": "جوز",
+      "en": "walnuts",
+      "category": "nuts",
+      "subcategory": "nuts",
+      "recipe_count": 25,
+      "recipes": ["desserts", "baking", "salads", "snacks", "cakes", "ice_cream"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 75
+      },
+      "product_types": ["walnuts", "walnut_pieces", "ground_walnuts", "walnut_oil"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "pine_nuts": {
+      "ar": "صنوبر",
+      "en": "pine nuts",
+      "category": "nuts",
+      "subcategory": "nuts",
+      "recipe_count": 20,
+      "recipes": ["rice_dishes", "pesto", "desserts", "garnishes", "kabsa"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 65
+      },
+      "product_types": ["pine_nuts", "pignolia"],
+      "qeu_relevance": 65,
+      "saudi_importance": "medium"
+    },
+    "fish": {
+      "ar": "سمك",
+      "en": "fish",
+      "category": "protein",
+      "subcategory": "seafood",
+      "recipe_count": 32,
+      "recipes": ["grilled_fish", "fried_fish", "fish_stew", "fish_rice", "sayadieh", "salmon", "saib"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 78
+      },
+      "product_types": ["whole_fish", "fish_steaks", "fish_filets", "canned_fish", "tuna", "salmon", "sardines"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "shrimp": {
+      "ar": "جمبري",
+      "en": "shrimp",
+      "category": "protein",
+      "subcategory": "seafood",
+      "recipe_count": 18,
+      "recipes": ["grilled_shrimp", "fried_shrimp", "shrimp_dishes", "pasta_shrimp"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 70
+      },
+      "product_types": ["fresh_shrimp", "frozen_shrimp", "shrimp_peeled", "shrimp_tails"],
+      "qeu_relevance": 62,
+      "saudi_importance": "medium"
+    },
+    "beef": {
+      "ar": "لحم بقري",
+      "en": "beef",
+      "category": "protein",
+      "subcategory": "red_meat",
+      "recipe_count": 45,
+      "recipes": ["ground_beef", "beef_stew", "beef_curry", "kofta", "arayes", "biryani"],
+      "seasonal_relevance": {
+        "ramadan_2025": 85,
+        "ramadan_2026": 85,
+        "year_round": 82
+      },
+      "product_types": ["ground_beef", "beef_chunks", "beef_steak", "beef_roast", "beef_liver"],
+      "qeu_relevance": 85,
+      "saudi_importance": "very_high"
+    },
+    "oats": {
+      "ar": "شوفان",
+      "en": "oats",
+      "category": "grains",
+      "subcategory": "oats",
+      "recipe_count": 15,
+      "recipes": ["quaker_soup", "oatmeal", "oat_bread", "smoothies", "baking"],
+      "seasonal_relevance": {
+        "ramadan_2025": 95,
+        "ramadan_2026": 95,
+        "year_round": 70
+      },
+      "product_types": ["rolled_oats", "instant_oats", "oat_flour", "steel_cut_oats"],
+      "qeu_relevance": 80,
+      "saudi_importance": "very_high"
+    },
+    "couscous": {
+      "ar": "كسكس",
+      "en": "couscous",
+      "category": "grains",
+      "subcategory": "grains",
+      "recipe_count": 25,
+      "recipes": ["couscous_salad", "couscous_dishes", "ramadan_couscous", "vegetable_couscous"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 68
+      },
+      "product_types": ["couscous", "israeli_couscous", "pearl_couscous"],
+      "qeu_relevance": 68,
+      "saudi_importance": "medium"
+    },
+    "bulgur": {
+      "ar": "برغل",
+      "en": "bulgur",
+      "category": "grains",
+      "subcategory": "grains",
+      "recipe_count": 22,
+      "recipes": ["tabbouleh", "kibbeh", "bulgur_salad", "bulgur_dishes", "jareesh"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 70
+      },
+      "product_types": ["fine_bulgur", "coarse_bulgur", "bulgur_wheat", "burghul"],
+      "qeu_relevance": 70,
+      "saudi_importance": "medium"
+    },
+    "vermicelli": {
+      "ar": "شعيرية",
+      "en": "vermicelli",
+      "category": "grains",
+      "subcategory": "pasta",
+      "recipe_count": 20,
+      "recipes": ["rice_dishes", "soups", "desserts", "sweet_dishes", "vermicelli_pudding"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 70
+      },
+      "product_types": ["vermicelli", "rice_vermicelli", "sweet_vermicelli", "asian_vermicelli"],
+      "qeu_relevance": 68,
+      "saudi_importance": "medium"
+    },
+    "green_beans": {
+      "ar": "فاصوليا خضراء",
+      "en": "green beans",
+      "category": "vegetables",
+      "subcategory": "legumes",
+      "recipe_count": 25,
+      "recipes": ["green_bean_stew", "salads", "stir_fry", "vegetable_mix"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 72
+      },
+      "product_types": ["fresh_green_beans", "frozen_green_beans", "canned_green_beans"],
+      "qeu_relevance": 62,
+      "saudi_importance": "medium"
+    },
+    "okra": {
+      "ar": "بامية",
+      "en": "okra",
+      "category": "vegetables",
+      "subcategory": "vegetables",
+      "recipe_count": 20,
+      "recipes": ["okra_stew", "bamya", "fried_okra", "pickled_okra"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 65
+      },
+      "product_types": ["fresh_okra", "frozen_okra", "dried_okra"],
+      "qeu_relevance": 60,
+      "saudi_importance": "medium"
+    },
+    "zucchini": {
+      "ar": "كوسة",
+      "en": "zucchini",
+      "category": "vegetables",
+      "subcategory": "vegetables",
+      "recipe_count": 18,
+      "recipes": ["stuffed_zucchini", "zucchini_soup", "zucchini_stew", "fried_zucchini"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 70
+      },
+      "product_types": ["fresh_zucchini", "frozen_zucchini", "zucchini_slices"],
+      "qeu_relevance": 58,
+      "saudi_importance": "low"
+    },
+    "cauliflower": {
+      "ar": "قرنبيط",
+      "en": "cauliflower",
+      "category": "vegetables",
+      "subcategory": "cruciferous",
+      "recipe_count": 15,
+      "recipes": ["cauliflower_soup", "fried_cauliflower", "cauliflower_stew", "salads"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 68
+      },
+      "product_types": ["fresh_cauliflower", "frozen_cauliflower", "cauliflower_rice"],
+      "qeu_relevance": 55,
+      "saudi_importance": "low"
+    },
+    "spinach": {
+      "ar": "سبانخ",
+      "en": "spinach",
+      "category": "vegetables",
+      "subcategory": "leafy_greens",
+      "recipe_count": 18,
+      "recipes": ["spinach_soup", "spinach_salad", "fatayer_spinach", "spinach_dishes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 72
+      },
+      "product_types": ["fresh_spinach", "frozen_spinach", "canned_spinach"],
+      "qeu_relevance": 60,
+      "saudi_importance": "medium"
+    },
+    "celery": {
+      "ar": "كرفس",
+      "en": "celery",
+      "category": "vegetables",
+      "subcategory": "herbs_vegetables",
+      "recipe_count": 15,
+      "recipes": ["soups", "stews", "salads", "quaker_soup"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 70
+      },
+      "product_types": ["fresh_celery", "celery_sticks", "celery_leaves"],
+      "qeu_relevance": 58,
+      "saudi_importance": "low"
+    },
+    "corn": {
+      "ar": "ذرة",
+      "en": "corn",
+      "category": "vegetables",
+      "subcategory": "grains_vegetables",
+      "recipe_count": 12,
+      "recipes": ["corn_salad", "corn_soup", "corn_dishes", "sweet_corn"],
+      "seasonal_relevance": {
+        "ramadan_2025": 50,
+        "ramadan_2026": 50,
+        "year_round": 65
+      },
+      "product_types": ["fresh_corn", "canned_corn", "frozen_corn", "corn_kernels"],
+      "qeu_relevance": 52,
+      "saudi_importance": "low"
+    },
+    "peas": {
+      "ar": "بازلاء",
+      "en": "peas",
+      "category": "legumes",
+      "subcategory": "peas",
+      "recipe_count": 18,
+      "recipes": ["pea_soup", "pea_salad", "rice_dishes", "stews"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 68
+      },
+      "product_types": ["fresh_peas", "frozen_peas", "canned_peas", "dried_peas"],
+      "qeu_relevance": 55,
+      "saudi_importance": "low"
+    },
+    "apricots": {
+      "ar": "مشمش",
+      "en": "apricots",
+      "category": "fruits",
+      "subcategory": "dried_fruits",
+      "recipe_count": 10,
+      "recipes": ["qamar_al_din", "apricot_jam", "desserts", "snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 90,
+        "ramadan_2026": 90,
+        "year_round": 45
+      },
+      "product_types": ["dried_apricots", "apricot_paste", "apricot_jam", "fresh_apricots"],
+      "qeu_relevance": 75,
+      "saudi_importance": "very_high"
+    },
+    "figs": {
+      "ar": "تين",
+      "en": "figs",
+      "category": "fruits",
+      "subcategory": "dried_fruits",
+      "recipe_count": 12,
+      "recipes": ["dried_figs", "fig_jam", "desserts", "snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 50
+      },
+      "product_types": ["dried_figs", "fresh_figs", "fig_paste"],
+      "qeu_relevance": 55,
+      "saudi_importance": "low"
+    },
+    "grapes": {
+      "ar": "عنب",
+      "en": "grapes",
+      "category": "fruits",
+      "subcategory": "fruits",
+      "recipe_count": 15,
+      "recipes": ["fresh_grapes", "raisins", "grape_juice", "desserts"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 70
+      },
+      "product_types": ["fresh_grapes", "green_grapes", "red_grapes", "raisins"],
+      "qeu_relevance": 58,
+      "saudi_importance": "medium"
+    },
+    "watermelon": {
+      "ar": "بطيخ",
+      "en": "watermelon",
+      "category": "fruits",
+      "subcategory": "fruits",
+      "recipe_count": 10,
+      "recipes": ["fresh_watermelon", "watermelon_juice", "fruit_salad", "snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 55
+      },
+      "product_types": ["watermelon", "watermelon_slices", "watermelon_juice"],
+      "qeu_relevance": 55,
+      "saudi_importance": "medium"
+    },
+    "pomegranate": {
+      "ar": "رمان",
+      "en": "pomegranate",
+      "category": "fruits",
+      "subcategory": "fruits",
+      "recipe_count": 12,
+      "recipes": ["fresh_pomegranate", "pomegranate_juice", "salads", "desserts"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 60
+      },
+      "product_types": ["pomegranate_seeds", "pomegranate_juice", "pomegranate_molasses"],
+      "qeu_relevance": 62,
+      "saudi_importance": "medium"
+    },
+    "mango": {
+      "ar": "مانجو",
+      "en": "mango",
+      "category": "fruits",
+      "subcategory": "tropical_fruits",
+      "recipe_count": 12,
+      "recipes": ["fresh_mango", "mango_juice", "mango_smoothie", "desserts"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 65
+      },
+      "product_types": ["fresh_mango", "mango_pulp", "frozen_mango", "dried_mango"],
+      "qeu_relevance": 58,
+      "saudi_importance": "medium"
+    },
+    "apple": {
+      "ar": "تفاح",
+      "en": "apple",
+      "category": "fruits",
+      "subcategory": "fruits",
+      "recipe_count": 15,
+      "recipes": ["fresh_apple", "apple_juice", "apple_salad", "desserts", "snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 75
+      },
+      "product_types": ["red_apples", "green_apples", "fuji_apples", "apple_juice"],
+      "qeu_relevance": 65,
+      "saudi_importance": "high"
+    },
+    "avocado": {
+      "ar": "افوكادو",
+      "en": "avocado",
+      "category": "fruits",
+      "subcategory": "tropical_fruits",
+      "recipe_count": 10,
+      "recipes": ["guacamole", "avocado_toast", "avocado_salad", "smoothies"],
+      "seasonal_relevance": {
+        "ramadan_2025": 50,
+        "ramadan_2026": 50,
+        "year_round": 70
+      },
+      "product_types": ["fresh_avocado", "avocado_paste", "guacamole"],
+      "qeu_relevance": 55,
+      "saudi_importance": "low"
+    },
+    "energy_bars": {
+      "ar": "شريط طاقة",
+      "en": "energy bars",
+      "category": "snacks",
+      "subcategory": "snacks",
+      "recipe_count": 5,
+      "recipes": ["snacks", "breakfast", "post_workout"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 75
+      },
+      "product_types": ["protein_bars", "energy_bars", "granola_bars", "healthy_bars"],
+      "qeu_relevance": 60,
+      "saudi_importance": "high"
+    },
+    "chips": {
+      "ar": "شيبس",
+      "en": "chips",
+      "category": "snacks",
+      "subcategory": "snacks",
+      "recipe_count": 3,
+      "recipes": ["snacks", "party_snacks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 85
+      },
+      "product_types": ["potato_chips", "tortilla_chips", "vegetable_chips", "corn_chips"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "biscuits": {
+      "ar": "بسكويت",
+      "en": "biscuits",
+      "category": "snacks",
+      "subcategory": "cookies",
+      "recipe_count": 5,
+      "recipes": ["tea_biscuits", "snacks", "desserts", "chocolate_biscuit_dessert"],
+      "seasonal_relevance": {
+        "ramadan_2025": 80,
+        "ramadan_2026": 80,
+        "year_round": 88
+      },
+      "product_types": ["tea_biscuits", "cream_biscuits", "chocolate_biscuits", "wafers"],
+      "qeu_relevance": 78,
+      "saudi_importance": "high"
+    },
+    "chocolate": {
+      "ar": "شوكولاتة",
+      "en": "chocolate",
+      "category": "snacks",
+      "subcategory": "confectionery",
+      "recipe_count": 8,
+      "recipes": ["chocolate_bars", "desserts", "drinks", "baking", "chocolate_biscuit_dessert"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 85
+      },
+      "product_types": ["dark_chocolate", "milk_chocolate", "white_chocolate", "chocolate_chips", "cocoa"],
+      "qeu_relevance": 75,
+      "saudi_importance": "high"
+    },
+    "almond_milk": {
+      "ar": "حليب اللوز",
+      "en": "almond milk",
+      "category": "dairy_alternatives",
+      "subcategory": "plant_milk",
+      "recipe_count": 8,
+      "recipes": ["drinks", "smoothies", "cereals", "coffee", "baking"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 78
+      },
+      "product_types": ["unsweetened_almond_milk", "sweet_almond_milk", "almond_milk_cartons"],
+      "qeu_relevance": 68,
+      "saudi_importance": "high"
+    },
+    "coconut_water": {
+      "ar": "ماء جوز الهند",
+      "en": "coconut water",
+      "category": "beverages",
+      "subcategory": "healthy_drinks",
+      "recipe_count": 5,
+      "recipes": ["drinks", "smoothies", "hydration"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 72
+      },
+      "product_types": ["fresh_coconut_water", "coconut_water_bottled", "coconut_milk"],
+      "qeu_relevance": 60,
+      "saudi_importance": "medium"
+    },
+    "herbal_tea": {
+      "ar": "شاي عشبي",
+      "en": "herbal tea",
+      "category": "beverages",
+      "subcategory": "tea",
+      "recipe_count": 10,
+      "recipes": ["herbal_tea", "chamomile", "peppermint", "ginger_tea"],
+      "seasonal_relevance": {
+        "ramadan_2025": 75,
+        "ramadan_2026": 75,
+        "year_round": 80
+      },
+      "product_types": ["chamomile_tea", "peppermint_tea", "ginger_tea", "green_tea", "herbal_blends"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "plant_based_meat": {
+      "ar": "لحم نباتي",
+      "en": "plant-based meat",
+      "category": "protein_alternatives",
+      "subcategory": "plant_protein",
+      "recipe_count": 8,
+      "recipes": ["plant_based_curry", "plant_based_burgers", "vegetarian_dishes"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 70
+      },
+      "product_types": ["beyond_meat", "impossible_meat", "veggie_burgers", "plant_protein"],
+      "qeu_relevance": 58,
+      "saudi_importance": "medium"
+    },
+    "halal_gelatin": {
+      "ar": "جيلاتين حلال",
+      "en": "halal gelatin",
+      "category": "baking",
+      "subcategory": "baking_ingredients",
+      "recipe_count": 12,
+      "recipes": ["desserts", "jellies", "cakes", " puddings"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 65
+      },
+      "product_types": ["gelatin_sheets", "gelatin_powder", "halal_gelatin"],
+      "qeu_relevance": 55,
+      "saudi_importance": "low"
+    },
+    "food_coloring": {
+      "ar": "تلوين الطعام",
+      "en": "food coloring",
+      "category": "baking",
+      "subcategory": "food_additives",
+      "recipe_count": 8,
+      "recipes": ["desserts", "cakes", "traditional_sweets"],
+      "seasonal_relevance": {
+        "ramadan_2025": 65,
+        "ramadan_2026": 65,
+        "year_round": 60
+      },
+      "product_types": ["liquid_coloring", "gel_coloring", "powder_coloring", "natural_coloring"],
+      "qeu_relevance": 52,
+      "saudi_importance": "low"
+    },
+    "orange_juice": {
+      "ar": "عصير برتقال",
+      "en": "orange juice",
+      "category": "beverages",
+      "subcategory": "fruit_juices",
+      "recipe_count": 8,
+      "recipes": ["fresh_juice", "breakfast", "drinks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 70,
+        "ramadan_2026": 70,
+        "year_round": 80
+      },
+      "product_types": ["fresh_orange_juice", "orange_juice_cartons", "frozen_orange_juice"],
+      "qeu_relevance": 72,
+      "saudi_importance": "high"
+    },
+    "apple_juice": {
+      "ar": "عصير تفاح",
+      "en": "apple juice",
+      "category": "beverages",
+      "subcategory": "fruit_juices",
+      "recipe_count": 6,
+      "recipes": ["fresh_juice", "drinks"],
+      "seasonal_relevance": {
+        "ramadan_2025": 60,
+        "ramadan_2026": 60,
+        "year_round": 72
+      },
+      "product_types": ["apple_juice", "apple_juice_cartons"],
+      "qeu_relevance": 62,
+      "saudi_importance": "medium"
+    },
+    "mango_juice": {
+      "ar": "عصير مانجو",
+      "en": "mango juice",
+      "category": "beverages",
+      "subcategory": "fruit_juices",
+      "recipe_count": 6,
+      "recipes": ["fresh_juice", "drinks", "mango_lassi"],
+      "seasonal_relevance": {
+        "ramadan_2025": 55,
+        "ramadan_2026": 55,
+        "year_round": 68
+      },
+      "product_types": ["mango_juice", "mango_pulp", "mango_nectar"],
+      "qeu_relevance": 58,
+      "saudi_importance": "medium"
+    }
+  },
+  "categories": {
+    "grains": {
+      "score": 98,
+      "subcategories": ["rice", "bread", "flour", "pasta", "couscous", "bulgur", "oats", "semolina", "cracked_wheat"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["rice", "flour", "bread", "pasta", "grains"]
+    },
+    "dates": {
+      "score": 100,
+      "subcategories": ["dried_dates", "fresh_dates", "date_products"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["dates", "dried_fruits"]
+    },
+    "protein": {
+      "score": 92,
+      "subcategories": ["chicken", "beef", "lamb", "fish", "eggs"],
+      "ramadan_importance": "very_high",
+      "qeu_categories": ["chicken", "beef", "lamb", "fish", "eggs", "protein"]
+    },
+    "dairy": {
+      "score": 88,
+      "subcategories": ["milk", "yogurt", "cheese", "cream", "butter", "labneh"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["milk", "yogurt", "cheese", "dairy"]
+    },
+    "vegetables": {
+      "score": 85,
+      "subcategories": ["onions", "tomatoes", "potatoes", "eggplant", "cucumber", "carrots", "peppers", "garlic", "lettuce", "spinach"],
+      "ramadan_importance": "very_high",
+      "qeu_categories": ["vegetables", "fresh_produce"]
+    },
+    "spices": {
+      "score": 95,
+      "subcategories": ["cumin", "coriander", "cinnamon", "cardamom", "turmeric", "sumac", "zaatar", "baharat", "pepper", "salt", "bay_leaves", "saffron"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["spices", "seasonings"]
+    },
+    "oils": {
+      "score": 88,
+      "subcategories": ["olive_oil", "vegetable_oil", "ghee", "canola_oil"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["cooking_oils", "olive_oil", "ghee"]
+    },
+    "legumes": {
+      "score": 90,
+      "subcategories": ["lentils", "chickpeas", "beans", "peas"],
+      "ramadan_importance": "very_high",
+      "qeu_categories": ["lentils", "chickpeas", "beans"]
+    },
+    "fruits": {
+      "score": 80,
+      "subcategories": ["dates", "bananas", "oranges", "lemons", "apples", "grapes", "watermelon", "mango", "pomegranate"],
+      "ramadan_importance": "very_high",
+      "qeu_categories": ["dates", "fresh_fruits", "dried_fruits"]
+    },
+    "nuts": {
+      "score": 82,
+      "subcategories": ["almonds", "pistachios", "walnuts", "pine_nuts", "cashews"],
+      "ramadan_importance": "very_high",
+      "qeu_categories": ["nuts", "almonds", "pistachios"]
+    },
+    "beverages": {
+      "score": 90,
+      "subcategories": ["water", "juices", "vimto", "tea", "coffee", "herbal_tea", "laban"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["beverages", "juices", "water", "tea", "coffee"]
+    },
+    "condiments": {
+      "score": 78,
+      "subcategories": ["tomato_paste", "tahini", "vinegar", "pomegranate_molasses", "dried_lime"],
+      "ramadan_importance": "very_high",
+      "qeu_categories": ["sauces", "condiments", "paste"]
+    },
+    "baking": {
+      "score": 75,
+      "subcategories": ["sugar", "honey", "flour", "yeast", "cocoa", "vanilla", "corn_starch"],
+      "ramadan_importance": "high",
+      "qeu_categories": ["baking_ingredients", "sugar", "honey"]
+    },
+    "herbs": {
+      "score": 78,
+      "subcategories": ["parsley", "mint", "basil", "coriander_leaves", "celery"],
+      "ramadan_importance": "high",
+      "qeu_categories": ["fresh_herbs", "herbs"]
+    },
+    "snacks": {
+      "score": 75,
+      "subcategories": ["chips", "biscuits", "chocolate", "energy_bars", "nuts_snacks"],
+      "ramadan_importance": "high",
+      "qeu_categories": ["snacks", "chips", "biscuits", "chocolate"]
+    },
+    "dairy_alternatives": {
+      "score": 70,
+      "subcategories": ["almond_milk", "oat_milk", "coconut_milk", "plant_based_meat"],
+      "ramadan_importance": "medium",
+      "qeu_categories": ["plant_milk", "dairy_alternatives"]
+    },
+    "saudi_specialties": {
+      "score": 100,
+      "subcategories": ["kabsa", "jareesh", "saleeg", "matazeez", "samboosa", "quaker_soup", "vimto", "saudi_coffee"],
+      "ramadan_importance": "critical",
+      "qeu_categories": ["saudi_food", "ramadan_specials", "traditional_dishes"]
+    }
+  },
+  "recipe_categories": {
+    "saudi_ramadan_dishes": {
+      "recipes_count": 11,
+      "key_ingredients": ["rice", "chicken", "lamb", "dates", "onions", "garlic", "ghee", "cardamom", "tomatoes", "bread"],
+      "score": 100,
+      "priority": "critical"
+    },
+    "iftar_soups": {
+      "recipes_count": 18,
+      "key_ingredients": ["lentils", "chickpeas", "tomatoes", "onions", "garlic", "carrots", "oats", "chicken"],
+      "score": 95
+    },
+    "iftar_appetizers": {
+      "recipes_count": 30,
+      "key_ingredients": ["bread", "cheese", "chickpeas", "parsley", "tomatoes", "cucumber", "flour", "vegetable_oil"],
+      "score": 92
+    },
+    "rice_dishes": {
+      "recipes_count": 25,
+      "key_ingredients": ["rice", "chicken", "onions", "tomatoes", "spices", "nuts", "raisins", "ghee", "dried_lime"],
+      "score": 100
+    },
+    "meat_dishes": {
+      "recipes_count": 28,
+      "key_ingredients": ["chicken", "beef", "lamb", "onions", "garlic", "spices", "tomatoes", "tomato_paste"],
+      "score": 90
+    },
+    "salads": {
+      "recipes_count": 22,
+      "key_ingredients": ["tomatoes", "cucumber", "parsley", "onions", "lemon", "olive_oil", "lettuce"],
+      "score": 75
+    },
+    "desserts": {
+      "recipes_count": 28,
+      "key_ingredients": ["sugar", "honey", "dates", "nuts", "flour", "ghee", "rosewater", "cocoa", "semolina"],
+      "score": 88
+    },
+    "beverages": {
+      "recipes_count": 18,
+      "key_ingredients": ["water", "juice", "yogurt", "mint", "dates", "vimto", "tea", "coffee", "almond_milk"],
+      "score": 90
+    },
+    "suhoor": {
+      "recipes_count": 20,
+      "key_ingredients": ["bread", "eggs", "cheese", "yogurt", "olives", "dates", "rice", "chicken"],
+      "score": 85
+    },
+    "snacks": {
+      "recipes_count": 15,
+      "key_ingredients": ["chips", "biscuits", "chocolate", "nuts", "energy_bars"],
+      "score": 78
+    }
+  }
+}

@@ -1,0 +1,8 @@
+OK
+docs/AGENTS.md
+data/AGENTS.md
+data/raw/AGENTS.md
+data/reference/AGENTS.md
+data/processed/AGENTS.md
+output/AGENTS.md
+rollback_safety_v2/AGENTS.md

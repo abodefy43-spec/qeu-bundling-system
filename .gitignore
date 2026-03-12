@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Data + output artifacts
+data/raw/*.csv
+data/raw/*.pkl
+data/raw/*.npy
+data/raw/*.npz
+data/processed/*.csv
+data/processed/*.pkl
+data/processed/*.npy
+data/processed/*.npz
+output/
+
+# Temporary archives / duplicates
+*.zip
+qeu-bundling-system/
+qeu-bundling-system1/

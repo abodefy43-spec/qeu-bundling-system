@@ -1,0 +1,88 @@
+{
+  "rules": [
+    {
+      "name": "rice_butter_low_context",
+      "anchor_terms": ["rice"],
+      "complement_terms": ["butter", "ghee"],
+      "multiplier": 0.78,
+      "reason": "staple-fat pairing is often too generic unless strong evidence exists"
+    },
+    {
+      "name": "sweet_yogurt_with_herb",
+      "anchor_terms": ["yogurt", "strawberry yogurt", "sweet yogurt"],
+      "complement_terms": ["mint", "herb", "fresh herbs"],
+      "multiplier": 0.8,
+      "reason": "sweet dairy with herb utility is usually low-intent"
+    },
+    {
+      "name": "tuna_with_plain_salt",
+      "anchor_terms": ["tuna", "fish"],
+      "complement_terms": ["salt", "sea salt"],
+      "multiplier": 0.74,
+      "reason": "protein + plain utility seasoning should need stronger context"
+    },
+    {
+      "name": "dates_with_generic_cheese",
+      "anchor_terms": ["dates"],
+      "complement_terms": ["mozzarella", "cheese"],
+      "multiplier": 0.82,
+      "reason": "dates pair better with dessert-style complements than generic cheese"
+    },
+    {
+      "name": "rice_with_tomato_paste_generic",
+      "anchor_terms": ["rice"],
+      "complement_terms": ["tomato paste"],
+      "multiplier": 0.72,
+      "reason": "rice with tomato paste is often too generic without stronger meal context"
+    },
+    {
+      "name": "rice_with_generic_chicken",
+      "anchor_terms": ["rice"],
+      "complement_terms": ["chicken"],
+      "multiplier": 0.84,
+      "reason": "rice and chicken should need stronger recipe or pair evidence than a broad default"
+    },
+    {
+      "name": "tuna_with_tomato_paste_generic",
+      "anchor_terms": ["tuna"],
+      "complement_terms": ["tomato paste"],
+      "multiplier": 0.7,
+      "reason": "tuna with tomato paste is a weak generic pantry fallback without stronger context"
+    },
+    {
+      "name": "chips_with_generic_cheese",
+      "anchor_terms": ["chips", "samosa chips", "spring roll chips"],
+      "complement_terms": ["cheese", "mozzarella", "cream cheese"],
+      "multiplier": 0.74,
+      "reason": "chips with cheese should be limited to genuinely strong snack evidence"
+    },
+    {
+      "name": "chocolate_with_plain_milk",
+      "anchor_terms": ["chocolate", "cake mix", "cake", "brownie"],
+      "complement_terms": ["milk", "full cream milk", "fresh milk"],
+      "multiplier": 0.82,
+      "reason": "sweet pairings with milk are common but too broad as universal snack defaults"
+    },
+    {
+      "name": "tea_with_biscuit_generic",
+      "anchor_terms": ["tea", "coffee"],
+      "complement_terms": ["biscuit", "biscuits", "cookie", "cookies"],
+      "multiplier": 0.8,
+      "reason": "tea or coffee with biscuits is plausible but too generic to rank highly by default"
+    },
+    {
+      "name": "milk_with_biscuit_generic",
+      "anchor_terms": ["milk", "evaporated milk", "condensed milk"],
+      "complement_terms": ["biscuit", "biscuits", "cookie", "cookies"],
+      "multiplier": 0.72,
+      "reason": "milk with biscuits should only survive when the milk type and evidence are clearly serving-oriented"
+    },
+    {
+      "name": "dessert_with_condensed_default",
+      "anchor_terms": ["dessert", "pudding", "cake mix", "brownie mix"],
+      "complement_terms": ["condensed milk"],
+      "multiplier": 0.78,
+      "reason": "dessert plus condensed milk is often an overused sweet fallback rather than a strong recommendation"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+﻿<!doctype html>
+<html lang="{{ ui_locale or 'en' }}" dir="{{ ui_dir or 'ltr' }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QEU | {{ page_title }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body class="{{ 'rtl-ui' if (ui_dir or 'ltr') == 'rtl' else '' }}">
+  <header class="topbar">
+    <div class="container topbar-inner">
+      <div class="topbar-brand">
+        <img src="{{ url_for('static', filename='qeu-logo.png') }}" alt="QEU" class="topbar-logo">
+        <div class="topbar-text">
+          <h1 class="topbar-title">
+            <span class="text-ar">{{ (ui_text or {}).get("header_title_ar", "نظام تجميع المنتجات") }}</span>
+            <span class="text-en">{{ (ui_text or {}).get("header_title_en", "Product Bundling") }}</span>
+          </h1>
+          <p class="topbar-subtitle">
+            <span class="text-ar">{{ (ui_text or {}).get("header_subtitle_ar", "لوحة احترافية لتوصيات الباقات") }}</span>
+            <span class="text-en">{{ (ui_text or {}).get("header_subtitle_en", "Bundle recommendations dashboard") }}</span>
+          </p>
+        </div>
+      </div>
+      <nav class="topbar-nav">
+        <a href="{{ url_for('dashboard') }}" class="topbar-nav__link topbar-nav__link--active">
+          <span class="text-ar">{{ (ui_text or {}).get("dashboard_nav_ar", "لوحة التحكم") }}</span>
+          <span class="text-en">{{ (ui_text or {}).get("dashboard_nav_en", "Dashboard") }}</span>
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, msg in messages %}
+          <div class="alert {{ category }}">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

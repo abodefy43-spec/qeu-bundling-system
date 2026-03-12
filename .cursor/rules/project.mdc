@@ -1,0 +1,47 @@
+﻿---
+description: QEU Bundling project memory and safety rules
+globs:
+  - "**/*"
+alwaysApply: true
+---
+# QEU Bundling Project Rules
+
+## Read order before coding
+1. `README.md`
+2. `docs/AI_CONTEXT.md`
+3. `docs/ARCHITECTURE.md`
+4. Relevant module + tests
+
+## Core constraints
+- Keep public route behavior stable (`src/qeu_bundling/presentation/app.py`).
+- Keep deterministic behavior for fixed seed/run_id/rng_salt.
+- Keep semantic hard-invalid checks absolute.
+- Feedback must not bypass hard-invalid safety.
+- Preserve visible lanes: `meal`, `snack`, `occasion`, optional `nonfood`.
+- Do not break free-item display convention (`product_b` forced free in presentation payloads).
+
+## Files that are safety-critical
+- `src/qeu_bundling/presentation/person_predictions.py`
+- `src/qeu_bundling/presentation/bundle_semantics.py`
+- `src/qeu_bundling/pipeline/phase_06_bundle_selection.py`
+- `src/qeu_bundling/core/evaluate_bundle_quality.py`
+
+## Required checks after behavior changes
+- Update/add relevant tests under `tests/`.
+- Run at minimum targeted tests for touched modules.
+- If recommendation behavior changed, verify review artifacts in `output/review/`.
+- Update docs when behavior/contracts changed.
+
+## Preferred engineering style
+- Small, coherent changes over broad rewrites.
+- Explicit rule-based logic for semantic decisions.
+- Stable tie-break ordering in ranking logic.
+- Additive diagnostics are allowed; avoid removing existing payload fields consumed by UI/forms.
+
+## Source-of-truth locations
+- Paths/env: `src/qeu_bundling/config/paths.py`
+- CLI contracts: `src/qeu_bundling/cli/__main__.py`
+- Route contracts: `src/qeu_bundling/presentation/app.py`
+- Semantic rules: `src/qeu_bundling/presentation/bundle_semantics.py`
+- Recommendation selection/ranking: `src/qeu_bundling/presentation/person_predictions.py`
+- Run lineage: `src/qeu_bundling/core/run_manifest.py`

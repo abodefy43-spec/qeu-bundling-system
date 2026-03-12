@@ -1,0 +1,6 @@
+AGENTS.md	48
+src/qeu_bundling/AGENTS.md	26
+src/qeu_bundling/presentation/AGENTS.md	24
+src/qeu_bundling/pipeline/AGENTS.md	23
+src/qeu_bundling/core/AGENTS.md	23
+tests/AGENTS.md	23

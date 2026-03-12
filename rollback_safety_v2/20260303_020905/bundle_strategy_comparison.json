@@ -1,0 +1,41 @@
+{
+  "old": {
+    "same_family_count": 0.0,
+    "same_parent_rate": 0.71,
+    "non_food_count": 0.0,
+    "avg_price_ratio_b_to_a": 0.33463499999999996,
+    "ratio_over_0_50_share": 0.0,
+    "utility_pair_count_top10": 0.0,
+    "feedback_conflict_count_top20": 0.0,
+    "top10_diversity": 18.0
+  },
+  "new": {
+    "same_family_count": 0.0,
+    "same_parent_rate": 0.0,
+    "non_food_count": 0.0,
+    "avg_price_ratio_b_to_a": 0.314316,
+    "ratio_over_0_50_share": 0.0,
+    "utility_pair_count_top10": 0.0,
+    "feedback_conflict_count_top20": 0.0,
+    "top10_diversity": 15.0
+  },
+  "overlap_top_bundles": 0.02,
+  "criteria": {
+    "same_family_zero": true,
+    "non_food_zero": true,
+    "avg_price_ratio_le_0_50": true,
+    "ratio_over_0_50_share_le_0_15": true,
+    "same_parent_not_worse": true,
+    "top10_diversity_not_degraded": false
+  },
+  "cutover_passed": false,
+  "selected_strategy": "old",
+  "feedback_diagnostics": {
+    "top_n_checked": 20,
+    "positive_match_count": 0,
+    "negative_match_count": 0,
+    "strong_negative_count": 0,
+    "avg_preference_match_strength": 0.0,
+    "max_preference_match_strength": 0.0
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "selected_strategy": "new",
+  "old": {
+    "raw_rows": 96082,
+    "retained_rows": 12000,
+    "unique_anchors_raw": 1661,
+    "unique_anchors_retained": 1661,
+    "pass_a_selected_rows": 6245,
+    "anchors_with_at_least_2": 1576,
+    "anchors_with_at_least_4": 1485
+  },
+  "new": {
+    "raw_rows": 96082,
+    "retained_rows": 12000,
+    "unique_anchors_raw": 1661,
+    "unique_anchors_retained": 1661,
+    "pass_a_selected_rows": 6245,
+    "anchors_with_at_least_2": 1576,
+    "anchors_with_at_least_4": 1485
+  },
+  "selected": {
+    "raw_rows": 96082,
+    "retained_rows": 12000,
+    "unique_anchors_raw": 1661,
+    "unique_anchors_retained": 1661,
+    "pass_a_selected_rows": 6245,
+    "anchors_with_at_least_2": 1576,
+    "anchors_with_at_least_4": 1485
+  }
+}
