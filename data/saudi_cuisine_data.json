@@ -1,0 +1,167 @@
+{
+  "saudi_dishes": {
+    "kabsa": {
+      "name": "Kabsa",
+      "description": "National dish of Saudi Arabia - spiced rice with chicken or meat",
+      "ingredients": ["rice", "chicken", "lamb", "tomatoes", "onion", "garlic", "carrots", "raisins", "almonds", "butter", "ghee", "baharat", "cinnamon", "cardamom", "saffron", "dried lime", "cumin", "coriander"],
+      "tags": ["rice_dishes", "kabsa", "national_dish", "ramadan", "saudi_staples"]
+    },
+    "jareesh": {
+      "name": "Jareesh",
+      "description": "Traditional Saudi porridge made from crushed wheat with meat",
+      "ingredients": ["crushed wheat", "chicken", "lamb", "onion", "garlic", "cumin", "coriander", "turmeric", "ghee"],
+      "tags": ["jareesh", "wheat", "comfort_food", "national_dish", "ramadan", "saudi_staples"]
+    },
+    "saleeg": {
+      "name": "Saleeg",
+      "description": "Creamy rice dish from Hejaz region - like Saudi risotto",
+      "ingredients": ["rice", "chicken", "milk", "butter", "ghee", "cardamom", "salt", "stock"],
+      "tags": ["saleeg", "rice_dishes", "cream", "hejaz", "saudi_staples"]
+    },
+    "samboosa": {
+      "name": "Samboosa",
+      "description": "Saudi samosas - fried or baked pastries with meat or vegetables",
+      "ingredients": ["flour", "ground beef", "lamb", "onion", "peas", "carrots", "cumin", "coriander", "mint", "vegetables", "cheese"],
+      "tags": ["samboosa", "appetizer", "ramadan", "snacks", "fried", "saudi_specialties"]
+    },
+    "quaker_soup": {
+      "name": "Quaker Soup",
+      "description": "Traditional Saudi soup with meat and grains",
+      "ingredients": ["meat", "chickpeas", "wheat", "onion", "tomatoes", "spices", "herbs"],
+      "tags": ["quaker_soup", "soup", "ramadan", "comfort_food", "saudi_staples"]
+    },
+    "mutabbaq": {
+      "name": "Mutabbaq",
+      "description": "Filled pancake or thick flatbread with meat or cheese",
+      "ingredients": ["flour", "ground beef", "cheese", "onion", "eggs", "spices"],
+      "tags": ["mutabbaq", "breakfast", "snacks", "saudi_specialties"]
+    },
+    "faggah": {
+      "name": "Faggah",
+      "description": "Traditional Saudi fried dough balls with date syrup",
+      "ingredients": ["flour", "yeast", "sugar", "dates", "honey", "ghee"],
+      "tags": ["faggah", "dessert", "fried", "sweet", "ramadan", "saudi_specialties"]
+    },
+    "maqshush": {
+      "name": "Maqshush",
+      "description": "National dessert of Saudi Arabia - wheat with ghee and honey",
+      "ingredients": ["wheat", "ghee", "honey", "almonds", "cardamom"],
+      "tags": ["maqshush", "dessert", "national_dish", "sweet", "ramadan", "saudi_specialties"]
+    },
+    "marqouq": {
+      "name": "Marqouq",
+      "description": "Saudi layered bread with cheese or meat",
+      "ingredients": ["flour", "cheese", "ground beef", "butter", "eggs"],
+      "tags": ["marqouq", "bread", "breakfast", "saudi_specialties"]
+    },
+    "bread": {
+      "name": "Arabic Bread",
+      "description": "Various types of Arabic bread including khubz and Lebanese bread",
+      "ingredients": ["flour", "yeast", "salt", "water", "sesame seeds"],
+      "tags": ["bread", "khubz", "pita", "staples", "breakfast", "saudi_staples"]
+    }
+  },
+  "food_pairings": {
+    "kabsa_complements": {
+      "description": "Items that go well with Kabsa",
+      "pairs": [
+        {"item_a": "kabsa", "item_b": "yogurt", "type": "dairy_complement"},
+        {"item_a": "kabsa", "item_b": "salad", "type": "fresh_balance"},
+        {"item_a": "kabsa", "item_b": "dates", "type": "traditional"},
+        {"item_a": "kabsa", "item_b": "阿拉伯咖啡", "type": "beverage"}
+      ]
+    },
+    "breakfast_pairings": {
+      "description": "Common Saudi breakfast combinations",
+      "pairs": [
+        {"item_a": "bread", "item_b": "labneh", "type": "classic"},
+        {"item_a": "bread", "item_b": "hummus", "type": "classic"},
+        {"item_a": "bread", "item_b": "eggs", "type": "protein"},
+        {"item_a": "bread", "item_b": "cheese", "type": "dairy"},
+        {"item_a": "labneh", "item_b": "olive oil", "type": "dressing"},
+        {"item_a": "labneh", "item_b": "zaatar", "type": "seasoning"}
+      ]
+    },
+    "snack_beverage_pairings": {
+      "description": "Popular snack and drink combinations in Saudi Arabia",
+      "pairs": [
+        {"item_a": "chips", "item_b": "juice", "type": "classic_snack"},
+        {"item_a": "chips", "item_b": "soft_drink", "type": "classic_snack"},
+        {"item_a": "bisuits", "item_b": "tea", "type": "classic"},
+        {"item_a": "biscuits", "item_b": "coffee", "type": "classic"},
+        {"item_a": "biscuits", "item_b": "milk", "type": "classic"},
+        {"item_a": "croissant", "item_b": "tea", "type": "classic"},
+        {"item_a": "croissant", "item_b": "coffee", "type": "classic"},
+        {"item_a": "croissant", "item_b": "juice", "type": "classic"},
+        {"item_a": "chocolate", "item_b": "milk", "type": "classic"},
+        {"item_a": "chocolate", "item_b": "coffee", "type": "classic"},
+        {"item_a": "nuts", "item_b": "tea", "type": "traditional"},
+        {"item_a": "nuts", "item_b": "coffee", "type": "traditional"},
+        {"item_a": "dates", "item_b": "coffee", "type": "traditional"},
+        {"item_a": "dates", "item_b": "tea", "type": "traditional"},
+        {"item_a": "samboosa", "item_b": "tea", "type": "classic"},
+        {"item_a": "samboosa", "item_b": "yogurt_drink", "type": "classic"}
+      ]
+    },
+    "tea_coffee_pairings": {
+      "description": "Traditional Saudi tea and coffee accompaniments",
+      "pairs": [
+        {"item_a": "saudi_coffee", "item_b": "dates", "type": "hospitality"},
+        {"item_a": "saudi_coffee", "item_b": "biscuits", "type": "hospitality"},
+        {"item_a": "saudi_coffee", "item_b": "nuts", "type": "hospitality"},
+        {"item_a": "tea", "item_b": "biscuits", "type": "classic"},
+        {"item_a": "tea", "item_b": "cake", "type": "classic"},
+        {"item_a": "tea", "item_b": "sweet", "type": "classic"},
+        {"item_a": "cardamom_tea", "item_b": "biscuits", "type": "saudi_style"},
+        {"item_a": "cardamom_tea", "item_b": "cookies", "type": "saudi_style"}
+      ]
+    },
+    "rice_dish_complements": {
+      "description": "What goes with Saudi rice dishes",
+      "pairs": [
+        {"item_a": "rice", "item_b": "chicken", "type": "main"},
+        {"item_a": "rice", "item_b": "lamb", "type": "main"},
+        {"item_a": "rice", "item_b": "fish", "type": "seafood"},
+        {"item_a": "rice", "item_b": "yogurt", "type": "dairy"},
+        {"item_a": "rice", "item_b": "salad", "type": "fresh"},
+        {"item_a": "rice", "item_b": "sauce", "type": "flavor"}
+      ]
+    },
+    "ramadan_combos": {
+      "description": "Traditional Ramadan food combinations",
+      "pairs": [
+        {"item_a": "dates", "item_b": "water", "type": "iftar_starter"},
+        {"item_a": "dates", "item_b": "laban", "type": "iftar"},
+        {"item_a": "soup", "item_b": "dates", "type": "iftar"},
+        {"item_a": "soup", "item_b": "bread", "type": "iftar"},
+        {"item_a": "kabsa", "item_b": "yogurt", "type": "iftar_main"},
+        {"item_a": "jareesh", "item_b": "bread", "type": "iftar"}
+      ]
+    }
+  },
+  "common_ingredients": [
+    "rice", "wheat", "chicken", "lamb", "beef", "fish", "shrimp",
+    "tomatoes", "onions", "garlic", "carrots", "potatoes", "peppers",
+    "chickpeas", "lentils", "beans", "peas",
+    "yogurt", "labneh", "milk", "cream", "cheese", "butter", "ghee",
+    "bread", "flour", "yeast",
+    "dates", "honey", "sugar", "almonds", "nuts", "raisins",
+    "cumin", "coriander", "cardamom", "cinnamon", "saffron", "turmeric",
+    "pepper", "salt", "baharat", "garam_masala", "seven_spices",
+    "olive_oil", "vegetable_oil", "sesame_oil",
+    "tea", "coffee", "juice", "water", "laban", "yogurt_drink",
+    "tahini", "hummus", "labneh", " sauces"
+  ],
+  "category_templates": {
+    "rice_dishes": ["kabsa", "biryani", "saleeg", "maqluba", "sayadieh"],
+    "soups_stews": ["quaker_soup", "lentil_soup", "harira", "shorba"],
+    "bread_baked": ["bread", "khubz", "pita", "manakish", "mutabbaq", "samboosa"],
+    "dairy_products": ["yogurt", "labneh", "cheese", "milk", "cream", "butter", "ghee"],
+    "desserts_sweets": ["maqshush", "faggah", "dates", "baklava", "kunafa", "maamoul"],
+    "beverages": ["tea", "coffee", "juice", "laban", "vimto", "jellab"],
+    "breakfast": ["bread", "eggs", "cheese", "hummus", "labneh", "olive_oil", "dates"],
+    "meat_protein": ["chicken", "lamb", "beef", "fish", "shrimp"],
+    "legumes": ["chickpeas", "lentils", "beans", "peas", "fava_beans"],
+    "salads": ["fattoush", "tabbouleh", "arabic_salad", "cucumber_tomato"]
+  }
+}

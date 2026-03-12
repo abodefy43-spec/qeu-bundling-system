@@ -1,0 +1,7 @@
+validated
+AGENTS.md
+src/qeu_bundling/AGENTS.md
+src/qeu_bundling/presentation/AGENTS.md
+src/qeu_bundling/pipeline/AGENTS.md
+src/qeu_bundling/core/AGENTS.md
+tests/AGENTS.md

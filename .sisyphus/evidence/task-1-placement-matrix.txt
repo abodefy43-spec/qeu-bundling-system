@@ -1,0 +1,15 @@
+CREATE
+AGENTS.md
+src/qeu_bundling/AGENTS.md
+src/qeu_bundling/presentation/AGENTS.md
+src/qeu_bundling/pipeline/AGENTS.md
+src/qeu_bundling/core/AGENTS.md
+tests/AGENTS.md
+SKIP
+docs/AGENTS.md
+data/AGENTS.md
+data/raw/AGENTS.md
+data/reference/AGENTS.md
+data/processed/AGENTS.md
+output/AGENTS.md
+rollback_safety_v2/AGENTS.md

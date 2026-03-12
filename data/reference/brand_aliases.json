@@ -1,0 +1,20 @@
+﻿{
+  "brands": [
+    {
+      "brand": "watania",
+      "aliases": ["watania", "الوطنية", "al watania"]
+    },
+    {
+      "brand": "wazin",
+      "aliases": ["wazin", "وازن"]
+    },
+    {
+      "brand": "almarai",
+      "aliases": ["almarai", "المراعي"]
+    },
+    {
+      "brand": "nada",
+      "aliases": ["nada", "ندى"]
+    }
+  ]
+}
