@@ -16,26 +16,24 @@
       </div>
       <div class="people-actions">
         <button type="button" class="btn btn--plus" id="openPeopleComposer">
-          <span class="text-ar">{{ t.get("new_prediction_ar", "توصية جديدة") }}</span>
-          <span class="text-en">{{ t.get("new_prediction_en", "New Prediction") }}</span>
+          <span class="text-ar">{{ t.get("new_prediction_ar", "إضافة شخص") }}</span>
         </button>
         <form method="post" action="{{ url_for('add_five_predictions') }}">
-          <button type="submit" class="btn btn--secondary">Add +5 Predictions</button>
+          <button type="submit" class="btn btn--secondary">
+            <span class="text-ar">{{ t.get("add_five_predictions_ar", "إضافة ٥ أشخاص") }}</span>
+          </button>
         </form>
         <form method="post" action="{{ url_for('shuffle_people') }}">
           <button type="submit" class="btn btn--secondary">
-            <span class="text-ar">{{ t.get("shuffle_all_ar", "إعادة توزيع الكل") }}</span>
-            <span class="text-en">{{ t.get("shuffle_all_en", "Shuffle All") }}</span>
+            <span class="text-ar">{{ t.get("shuffle_all_ar", "تبديل الأشخاص") }}</span>
           </button>
         </form>
         <form method="post" action="{{ url_for('refresh') }}">
           <button type="submit" class="btn" {% if run_status.running %}disabled{% endif %}>
             {% if run_status.running %}
-              <span class="text-ar">{{ t.get("refresh_running_ar", "جاري التحديث...") }}</span>
-              <span class="text-en">{{ t.get("refresh_running_en", "Refresh Running...") }}</span>
+              <span class="text-ar">{{ t.get("refresh_running_ar", "يتم التحديث...") }}</span>
             {% else %}
-              <span class="text-ar">{{ t.get("refresh_data_ar", "تحديث البيانات") }}</span>
-              <span class="text-en">{{ t.get("refresh_data_en", "Refresh Data") }}</span>
+              <span class="text-ar">{{ t.get("refresh_data_ar", "تحديث التوصيات") }}</span>
             {% endif %}
           </button>
         </form>
@@ -84,7 +82,6 @@
 
     {% if person_recommendations %}
       {# â”€â”€ lane display config â”€â”€ #}
-      {% set lane_order = ["meal", "snack", "occasion"] %}
       {% set lane_labels_map = {
         "meal":     {"ar": "وجبة",           "en": "Meal"},
         "snack":    {"ar": "سناك",           "en": "Snack"},
@@ -94,13 +91,7 @@
 
       <div class="people-reco-grid--strip">
         {% for reco in person_recommendations %}
-        {# â”€â”€ build a laneâ†’bundle lookup for this person â”€â”€ #}
-        {% set ns = namespace(bundle_by_lane={}) %}
-        {% for bundle in (reco.bundles or []) %}
-          {% if bundle.lane in lane_order and bundle.lane not in ns.bundle_by_lane %}
-            {% set _ = ns.bundle_by_lane.update({bundle.lane: bundle}) %}
-          {% endif %}
-        {% endfor %}
+        {% set display_bundles = reco.display_bundles or (reco.bundles or []) %}
 
         <div class="person-strip">
           {# â”€â”€ Person header â”€â”€ #}
@@ -116,139 +107,129 @@
 
           {# â”€â”€ 3-column lane grid â”€â”€ #}
           <div class="lane-grid">
-            {% for lane_key in lane_order %}
-              {% set bundle = ns.bundle_by_lane.get(lane_key) %}
-              {% set ll = lane_labels_map.get(lane_key, {"ar": lane_key, "en": lane_key}) %}
-
-              {% if bundle %}
-                {# â”€â”€ Determine source pill style â”€â”€ #}
-                {% set origin_label = bundle.recommendation_origin_label or "Copurchase fallback" %}
-                {% if origin_label == "Top-bundle match" %}
-                  {% set pill_class = "source-pill--teal" %}
-                {% elif origin_label == "Copurchase fallback" %}
-                  {% set pill_class = "source-pill--amber" %}
-                {% else %}
-                  {% set pill_class = "source-pill--slate" %}
-                {% endif %}
-
-                {# â”€â”€ Resolve anchor / complement items â”€â”€ #}
-                {% set items = bundle.bundle_items or [] %}
-                {% set item_ns = namespace(anchor=none, complement=none) %}
-                {% for item in items %}
-                  {% if not item.is_free and item_ns.anchor is none %}
-                    {% set item_ns.anchor = item %}
-                  {% elif item.is_free and item_ns.complement is none %}
-                    {% set item_ns.complement = item %}
-                  {% endif %}
-                {% endfor %}
-                {% if item_ns.anchor is none and items | length > 0 %}
-                  {% set item_ns.anchor = items[0] %}
-                {% endif %}
-                {% if item_ns.complement is none and items | length > 1 %}
-                  {% set item_ns.complement = items[1] %}
-                {% endif %}
-                {% set anchor_item = item_ns.anchor %}
-                {% set complement_item = item_ns.complement %}
-
-                <div class="lane-card">
-                  {# â”€â”€ Lane header â”€â”€ #}
-                  <div class="lane-card__header">
-                    <div>
-                      <div class="lane-card__lane-label-ar">{{ ll.ar }}</div>
-                      <div class="lane-card__lane-label-en">{{ ll.en }}</div>
-                    </div>
-                    <span class="source-pill {{ pill_class }}">
-                      <span class="text-ar">{{ bundle.recommendation_origin_label_ar or origin_label }}</span>
-                      <span class="text-en">{{ origin_label }}</span>
-                    </span>
-                  </div>
-
-                  {# â”€â”€ Confidence + reason â”€â”€ #}
-                  <div class="lane-card__meta">
-                    {% set conf_value = (bundle.confidence_score or 0) | float %}
-                    <span class="confidence-pill">{{ (99.5 if conf_value > 99.5 else conf_value) | round(1) }}% {{ t.get("confidence_ar", "ثقة") }}</span>
-                    {% if bundle.recommendation_reasons_ar and bundle.recommendation_reasons_ar | length > 0 %}
-                      <span class="lane-card__reason">{{ bundle.recommendation_reasons_ar[0] }}</span>
-                    {% endif %}
-                  </div>
-
-                  {# â”€â”€ Anchor (hero product) â”€â”€ #}
-                  <div class="anchor-block">
-                    <div class="anchor-block__label">
-                      <span class="text-ar">{{ t.get("main_product_ar", "المنتج الرئيسي") }}</span>
-                      <span class="text-en">Main Product</span>
-                    </div>
-                    <div class="anchor-block__body">
-                      {% if anchor_item and anchor_item.image_url %}
-                        <img class="anchor-block__img" src="{{ anchor_item.image_url }}" alt="{{ anchor_item.name_ar or anchor_item.name }}" loading="lazy">
-                      {% else %}
-                        <div class="anchor-block__img-placeholder">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-                        </div>
-                      {% endif %}
-                      <div class="anchor-block__text">
-                        <div class="anchor-block__name-ar">{{ (anchor_item.name_ar if anchor_item else bundle.product_a_name_ar) or bundle.product_a_name }}</div>
-                        <div class="anchor-block__name-en">{{ (anchor_item.name if anchor_item else bundle.product_a_name) or "" }}</div>
-                        <div class="anchor-block__price-row">
-                          <span class="anchor-block__price">SAR {{ anchor_item.price_sar if anchor_item else "-" }}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {# â”€â”€ Complement (free product) â”€â”€ #}
-                  <div class="complement-block">
-                    <div class="complement-block__header">
-                      <div class="complement-block__label">
-                        <span class="text-ar">{{ t.get("free_product_ar", "المنتج المجاني") }}</span>
-                        <span class="text-en">Free Product</span>
-                      </div>
-                      <span class="free-pill">{{ t.get("free_label_ar", "مجاني") }}</span>
-                    </div>
-                    <div class="complement-block__body">
-                      {% if complement_item and complement_item.image_url %}
-                        <img class="complement-block__img" src="{{ complement_item.image_url }}" alt="{{ complement_item.name_ar or complement_item.name }}" loading="lazy">
-                      {% else %}
-                        <div class="complement-block__img-placeholder">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
-                        </div>
-                      {% endif %}
-                      <div class="complement-block__text">
-                        <div class="complement-block__name-ar">{{ (complement_item.name_ar if complement_item else bundle.product_b_name_ar) or bundle.product_b_name }}</div>
-                        <div class="complement-block__name-en">{{ (complement_item.name if complement_item else bundle.product_b_name) or "" }}</div>
-                      </div>
-                      <div class="complement-block__prices">
-                        {% if complement_item and complement_item.is_free %}
-                          <span class="complement-block__original-price">SAR {{ complement_item.price_sar }}</span>
-                          <span class="complement-block__free-price">SAR 0.00</span>
-                        {% elif complement_item %}
-                          <span class="complement-block__original-price">SAR {{ complement_item.price_sar }}</span>
-                          <div class="complement-block__discount-row">
-                            <span class="complement-block__after-price">SAR {{ complement_item.price_after_sar }}</span>
-                            {% if complement_item.discount %}
-                              <span class="complement-block__discount-badge">{{ complement_item.discount }}</span>
-                            {% endif %}
-                          </div>
-                        {% else %}
-                          <span class="complement-block__free-price">SAR 0.00</span>
-                        {% endif %}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+            {% for bundle in display_bundles[:3] %}
+              {% set original_lane = (bundle.lane or "") | lower %}
+              {% set ll = lane_labels_map.get(original_lane, {"ar": "غير مصنف", "en": "Unclassified"}) %}
+              {# â”€â”€ Determine source pill style â”€â”€ #}
+              {% set origin_label = bundle.recommendation_origin_label or "Copurchase fallback" %}
+              {% if origin_label == "Top-bundle match" %}
+                {% set pill_class = "source-pill--teal" %}
+              {% elif origin_label == "Copurchase fallback" %}
+                {% set pill_class = "source-pill--amber" %}
               {% else %}
-                {# â”€â”€ Empty lane placeholder â”€â”€ #}
-                <div class="lane-card--empty">
-                  <div class="lane-card--empty__inner">
-                    <div class="lane-card--empty__label">{{ ll.ar }} / {{ ll.en }}</div>
-                    <div class="lane-card--empty__note">
-                      <span class="text-ar">لا توجد باقة متاحة لهذا القسم</span>
-                      <span class="text-en">No bundle available for this lane</span>
+                {% set pill_class = "source-pill--slate" %}
+              {% endif %}
+
+              {# â”€â”€ Resolve anchor / complement items â”€â”€ #}
+              {% set items = bundle.bundle_items or [] %}
+              {% set item_ns = namespace(anchor=none, complement=none) %}
+              {% for item in items %}
+                {% if not item.is_free and item_ns.anchor is none %}
+                  {% set item_ns.anchor = item %}
+                {% elif item.is_free and item_ns.complement is none %}
+                  {% set item_ns.complement = item %}
+                {% endif %}
+              {% endfor %}
+              {% if item_ns.anchor is none and items | length > 0 %}
+                {% set item_ns.anchor = items[0] %}
+              {% endif %}
+              {% if item_ns.complement is none and items | length > 1 %}
+                {% set item_ns.complement = items[1] %}
+              {% endif %}
+              {% set anchor_item = item_ns.anchor %}
+              {% set complement_item = item_ns.complement %}
+
+              <div class="lane-card">
+                {# â”€â”€ Bundle header â”€â”€ #}
+                <div class="lane-card__header">
+                  <div>
+                    <div class="lane-card__lane-label-ar">الباقة {{ loop.index }}</div>
+                    <div class="lane-card__lane-label-en">Bundle {{ loop.index }}</div>
+                  </div>
+                  <span class="source-pill {{ pill_class }}">
+                    <span class="text-ar">{{ bundle.recommendation_origin_label_ar or origin_label }}</span>
+                    <span class="text-en">{{ origin_label }}</span>
+                  </span>
+                </div>
+
+                <div class="classification-pill">
+                  <span class="text-ar">التصنيف: {{ ll.ar }}</span>
+                  <span class="text-en">Classification: {{ ll.en }}</span>
+                </div>
+
+                {# â”€â”€ Confidence + reason â”€â”€ #}
+                <div class="lane-card__meta">
+                  {% set conf_value = (bundle.confidence_score or 0) | float %}
+                  <span class="confidence-pill">{{ (99.5 if conf_value > 99.5 else conf_value) | round(1) }}% {{ t.get("confidence_ar", "ثقة") }}</span>
+                  {% if bundle.recommendation_reasons_ar and bundle.recommendation_reasons_ar | length > 0 %}
+                    <span class="lane-card__reason">{{ bundle.recommendation_reasons_ar[0] }}</span>
+                  {% endif %}
+                </div>
+
+                {# â”€â”€ Anchor (hero product) â”€â”€ #}
+                <div class="anchor-block">
+                  <div class="anchor-block__label">
+                    <span class="text-ar">{{ t.get("main_product_ar", "المنتج الرئيسي") }}</span>
+                    <span class="text-en">Main Product</span>
+                  </div>
+                  <div class="anchor-block__body">
+                    {% if anchor_item and anchor_item.image_url %}
+                      <img class="anchor-block__img" src="{{ anchor_item.image_url }}" alt="{{ anchor_item.name_ar or anchor_item.name }}" loading="lazy">
+                    {% else %}
+                      <div class="anchor-block__img-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                      </div>
+                    {% endif %}
+                    <div class="anchor-block__text">
+                      <div class="anchor-block__name-ar">{{ (anchor_item.name_ar if anchor_item else bundle.product_a_name_ar) or bundle.product_a_name }}</div>
+                      <div class="anchor-block__name-en">{{ (anchor_item.name if anchor_item else bundle.product_a_name) or "" }}</div>
+                      <div class="anchor-block__price-row">
+                        <span class="anchor-block__price">SAR {{ anchor_item.price_sar if anchor_item else "-" }}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
-              {% endif %}
+
+                {# â”€â”€ Complement (free product) â”€â”€ #}
+                <div class="complement-block">
+                  <div class="complement-block__header">
+                    <div class="complement-block__label">
+                      <span class="text-ar">{{ t.get("free_product_ar", "المنتج المجاني") }}</span>
+                      <span class="text-en">Free Product</span>
+                    </div>
+                    <span class="free-pill">{{ t.get("free_label_ar", "مجاني") }}</span>
+                  </div>
+                  <div class="complement-block__body">
+                    {% if complement_item and complement_item.image_url %}
+                      <img class="complement-block__img" src="{{ complement_item.image_url }}" alt="{{ complement_item.name_ar or complement_item.name }}" loading="lazy">
+                    {% else %}
+                      <div class="complement-block__img-placeholder">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                      </div>
+                    {% endif %}
+                    <div class="complement-block__text">
+                      <div class="complement-block__name-ar">{{ (complement_item.name_ar if complement_item else bundle.product_b_name_ar) or bundle.product_b_name }}</div>
+                      <div class="complement-block__name-en">{{ (complement_item.name if complement_item else bundle.product_b_name) or "" }}</div>
+                    </div>
+                    <div class="complement-block__prices">
+                      {% if complement_item and complement_item.is_free %}
+                        <span class="complement-block__original-price">SAR {{ complement_item.price_sar }}</span>
+                        <span class="complement-block__free-price">SAR 0.00</span>
+                      {% elif complement_item %}
+                        <span class="complement-block__original-price">SAR {{ complement_item.price_sar }}</span>
+                        <div class="complement-block__discount-row">
+                          <span class="complement-block__after-price">SAR {{ complement_item.price_after_sar }}</span>
+                          {% if complement_item.discount %}
+                            <span class="complement-block__discount-badge">{{ complement_item.discount }}</span>
+                          {% endif %}
+                        </div>
+                      {% else %}
+                        <span class="complement-block__free-price">SAR 0.00</span>
+                      {% endif %}
+                    </div>
+                  </div>
+                </div>
+              </div>
             {% endfor %}
           </div>
         </div>

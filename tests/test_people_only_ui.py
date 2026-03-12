@@ -6,6 +6,7 @@ import pandas as pd
 from qeu_bundling.presentation.app import (
     _DEFAULT_PROFILE_CACHE,
     _DEFAULT_RECOMMENDATION_CACHE,
+    _apply_dashboard_bundle_display_mapping,
     app,
     prewarm_local_dashboard_defaults,
 )
@@ -14,6 +15,26 @@ from qeu_bundling.presentation.person_predictions import PersonProfile
 
 
 class PeopleOnlyUiTests(unittest.TestCase):
+    def test_dashboard_display_preserves_three_selected_bundles_without_relabel(self):
+        recommendations = [
+            {
+                "person_label": "Person 1",
+                "bundles": [
+                    {"lane": "meal", "bundle_id": "meal_a"},
+                    {"lane": "meal", "bundle_id": "meal_b"},
+                    {"lane": "occasion", "bundle_id": "occ_a"},
+                ],
+            }
+        ]
+        rendered = _apply_dashboard_bundle_display_mapping(recommendations)
+        self.assertEqual(len(rendered), 1)
+        display_bundles = rendered[0].get("display_bundles", [])
+        self.assertEqual(len(display_bundles), 3)
+        self.assertEqual(str(display_bundles[0].get("bundle_id")), "meal_a")
+        self.assertEqual(str(display_bundles[1].get("bundle_id")), "meal_b")
+        self.assertEqual(str(display_bundles[2].get("bundle_id")), "occ_a")
+        self.assertEqual(str(display_bundles[1].get("lane")), "meal")
+
     def test_dashboard_is_people_only(self):
         client = app.test_client()
         with patch(
@@ -25,7 +46,7 @@ class PeopleOnlyUiTests(unittest.TestCase):
         html = res.get_data(as_text=True)
         self.assertIn('dir="rtl"', html)
         self.assertIn("توصيات مخصصة حسب الأشخاص", html)
-        self.assertIn("Add +5 Predictions", html)
+        self.assertIn("إضافة ٥ أشخاص", html)
         self.assertNotIn("Top 10 Compatible Bundles", html)
 
     def test_bundles_route_redirects_to_dashboard(self):

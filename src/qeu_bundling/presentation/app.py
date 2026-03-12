@@ -423,6 +423,20 @@ def _apply_cleaning_display_fallback(recommendations: list[dict[str, object]]) -
     return list(recommendations or [])
 
 
+def _apply_dashboard_bundle_display_mapping(recommendations: list[dict[str, object]]) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for rec in recommendations or []:
+        if not isinstance(rec, dict):
+            continue
+        rec_out = copy.deepcopy(rec)
+        bundles = rec_out.get("bundles", [])
+        if not isinstance(bundles, list):
+            bundles = []
+        rec_out["display_bundles"] = [bundle for bundle in bundles if isinstance(bundle, dict)][:3]
+        out.append(rec_out)
+    return out
+
+
 @app.get("/")
 def dashboard():
     status = get_status()
@@ -478,12 +492,14 @@ def dashboard():
     with _PERSON_LOCK:
         _cache_default_recommendations(current_run_id, state, translated_recommendations)
 
+    rendered_recommendations = _apply_dashboard_bundle_display_mapping(translated_recommendations)
+
     return render_template(
         "dashboard.html",
         page_title="Executive Dashboard",
         kpis=data.kpis,
         top10_rows=data.top10_rows,
-        person_recommendations=translated_recommendations,
+        person_recommendations=rendered_recommendations,
         data_warning=data.data_warning,
         run_status=status,
         people_count=len(state.profiles),
