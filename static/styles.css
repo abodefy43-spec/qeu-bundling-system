@@ -190,6 +190,15 @@ h2 { margin: 0 0 14px; font-size: 1.1rem; font-weight: 700; }
   margin-bottom: 16px;
 }
 
+.panel-header--people {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.panel-header--people .section-head--tight {
+  flex: 1 1 360px;
+}
+
 .status-grid {
   display: grid;
   gap: 10px;
@@ -285,9 +294,25 @@ h2 { margin: 0 0 14px; font-size: 1.1rem; font-weight: 700; }
 
 .people-actions {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  justify-content: flex-end;
+  row-gap: 8px;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.people-actions form {
+  display: flex;
+  margin: 0;
+}
+
+.people-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  height: 100%;
+  white-space: nowrap;
 }
 
 .people-composer {
@@ -729,7 +754,7 @@ td .badge { vertical-align: middle; }
 }
 
 .rtl-ui .panel-header--people {
-  align-items: flex-start;
+  align-items: flex-end;
   margin-bottom: 20px;
 }
 
@@ -766,13 +791,14 @@ td .badge { vertical-align: middle; }
 
 .rtl-ui .people-actions .btn {
   display: inline-flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 130px;
+  flex-direction: row;
+  gap: 0;
+  min-width: 138px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  padding: 9px 13px;
+  padding: 9px 16px;
 }
 
 .rtl-ui .people-actions .btn .text-ar {
@@ -782,6 +808,10 @@ td .badge { vertical-align: middle; }
 .rtl-ui .people-actions .btn .text-en {
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.63rem;
+}
+
+.rtl-ui .people-actions form {
+  display: flex;
 }
 
 .rtl-ui .people-composer {
@@ -1085,6 +1115,27 @@ html[dir="rtl"] .bundle-card__prices .price-row {
   justify-content: space-between;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.classification-pill {
+  display: inline-flex;
+  flex-direction: column;
+  border: 1px solid #D6E4FF;
+  background: #F8FAFF;
+  border-radius: 999px;
+  padding: 5px 12px;
+  margin-bottom: 12px;
+  width: fit-content;
+}
+
+.classification-pill .text-ar {
+  color: #1e293b;
+  font-size: 0.72rem;
+}
+
+.classification-pill .text-en {
+  color: #64748b;
+  font-size: 0.62rem;
 }
 
 .lane-card__lane-label-ar {

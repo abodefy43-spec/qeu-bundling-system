@@ -31,14 +31,62 @@ MAX_TOP_BUNDLE_CANDIDATES_BY_LANE = {"meal": 80, "snack": 140, "occasion": 180, 
 MAX_COPURCHASE_FALLBACK = 80
 MAX_BUNDLES_PER_PERSON = 3
 MAX_CLEANING_BUNDLES_PER_PERSON = 1
-EXPOSURE_PAIR_PENALTY = 0.12
-EXPOSURE_TEMPLATE_SIGNATURE_PENALTY = 0.10
+EXPOSURE_PAIR_PENALTY = 0.30
+EXPOSURE_TEMPLATE_SIGNATURE_PENALTY = 0.14
+EXPOSURE_FALLBACK_MOTIF_PENALTY = 0.18
+EXPOSURE_MOTIF_FAMILY_PENALTY = 0.60
+EXPOSURE_FAMILY_PATTERN_PENALTY = 0.36
+EXPOSURE_BUNDLE_SHAPE_PENALTY = 0.32
+EXPOSURE_MEAL_DOMINANT_MOTIF_PENALTY = 0.78
+EXPOSURE_MEAL_FAMILY_SATURATION_THRESHOLD = 2
+EXPOSURE_MEAL_FAMILY_SATURATION_PENALTY = 1.35
+EXPOSURE_MEAL_PATTERN_SATURATION_PENALTY = 0.84
+EXPOSURE_MEAL_SHAPE_SATURATION_PENALTY = 0.62
+EXPOSURE_MEAL_DOMINANT_FALLBACK_EXTRA = 0.44
+EXPOSURE_SNACK_FAMILY_SATURATION_THRESHOLD = 3
+EXPOSURE_SNACK_FAMILY_SATURATION_PENALTY = 0.56
+EXPOSURE_SNACK_DOMINANT_FAMILY_EXTRA = 0.34
+MEAL_DOMINANT_HARD_DECAY_START = 3
+MEAL_DOMINANT_HARD_DECAY_STEP = 0.62
+MEAL_CHICKEN_DEFAULT_EXTRA_DECAY = 0.40
+MEAL_RICE_MEAT_EXTRA_DECAY = 0.48
+EXPOSURE_SURGE_THRESHOLD_PAIR = 1
+EXPOSURE_SURGE_THRESHOLD_TEMPLATE = 1
+EXPOSURE_SURGE_THRESHOLD_MOTIF = 1
+EXPOSURE_SURGE_THRESHOLD_FAMILY = 1
+EXPOSURE_SURGE_THRESHOLD_SHAPE = 1
+EXPOSURE_SURGE_MULTIPLIER = 0.85
+EXPOSURE_SURGE_POWER = 1.35
+RARER_STRONG_ALTERNATIVE_BONUS_STEP = 0.12
+RARER_STRONG_ALTERNATIVE_BONUS_CAP = 0.24
+RARER_STRONG_FAMILY_BONUS_STEP = 0.16
+RARER_STRONG_FAMILY_BONUS_CAP = 0.42
+NON_MEAL_COVERAGE_MARGIN = 0.56
+FAMILY_OVERUSE_RANK_PENALTY_STEP = 0.18
+FAMILY_OVERUSE_RANK_PENALTY_CAP = 0.54
+FAMILY_RARITY_CLOSE_SCORE_MARGIN = 0.55
+FAMILY_RARITY_CLOSE_SCORE_BONUS = 0.24
+MEAL_DOMINANT_CLOSE_SCORE_EXTRA_PENALTY = 0.34
+FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD = 2
 GENERIC_THEME_PENALTY = 0.08
 WEAK_CANDIDATE_PENALTY = 0.18
 TOP_TRIO_CANDIDATES_PER_LANE = 18
 RECENCY_BOOST_WEIGHT = 0.28
 COUNT_BOOST_WEIGHT = 0.08
-LANE_INTENT_BOOST_WEIGHT = 0.10
+LANE_INTENT_BOOST_WEIGHT = 0.16
+PERSONAL_ANCHOR_HISTORY_BOOST = 0.22
+PERSONAL_COMPLEMENT_HISTORY_BOOST = 0.12
+PERSONAL_PRODUCT_REPEAT_WEIGHT = 0.16
+PERSONAL_FAMILY_AFFINITY_WEIGHT = 0.14
+PERSONAL_CATEGORY_AFFINITY_WEIGHT = 0.10
+PERSONAL_STRONG_ANCHOR_MATCH_BONUS = 0.08
+PERSONAL_ESCAPE_GENERIC_MEAL_PENALTY = 0.16
+PERSONAL_ESCAPE_GENERIC_MEAL_AFFINITY_PENALTY = 0.06
+PERSONAL_NONMEAL_HISTORY_ESCAPE_BONUS = 0.10
+PERSONAL_WRAP_STYLE_HISTORY_BONUS = 0.08
+PERSONAL_SNACK_OCCASION_PATTERN_BONUS = 0.06
+PERSONAL_SHOPPER_FAMILY_ALIGNMENT_WEIGHT = 0.22
+PERSONAL_SHOPPER_FAMILY_ESCAPE_PENALTY = 0.12
 NON_FOOD_TAG = "non_food"
 LANE_NONFOOD = "nonfood"
 STRICT_RECIPE_COMPAT_MIN = 0.16
@@ -64,6 +112,8 @@ TOP10_ANCHOR_SIZE = 18
 MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE = 40
 NONFOOD_INCLUDE_RATE = 0.20
 PREMIUM_TOP_N = 5
+FALLBACK_MOTIF_REPEAT_CAP_PER_PERSON = 1
+FALLBACK_EVAP_MOTIF_CAP_PER_PERSON = 2
 FEEDBACK_REVIEW_REL_PATH = Path("review") / "bundle_feedback.csv"
 FEEDBACK_STRONG_BOOST = 0.75
 FEEDBACK_WEAK_PENALTY = 0.45
@@ -311,6 +361,284 @@ BAD_PAIR_PATTERNS = (
     ("burger", "ready rice"),
     ("olive oil", "fish biscuits"),
     ("ketchup", "flour"),
+)
+FINAL_QUALITY_MILK_BLOCK_HINTS = frozenset(
+    {
+        "fresh milk",
+        "full fat milk",
+        "full cream milk",
+        "low fat milk",
+        "whole milk",
+        "milk drink",
+        "evaporated milk",
+        "flavored milk",
+        "flavoured milk",
+        "milk",
+    }
+)
+FINAL_QUALITY_MILK_EXCLUSION_HINTS = frozenset(
+    {
+        "condensed milk",
+        "milk powder",
+        "baby milk",
+        "infant formula",
+        "formula",
+        "cream cheese",
+        "cheese",
+        "labneh",
+        "yogurt",
+        "yoghurt",
+        "fresh cream",
+        "cooking cream",
+    }
+)
+FINAL_QUALITY_NOODLE_HINTS = frozenset(
+    {"noodles", "indomie", "ramen", "instant noodle", "cup noodles", "topokki", "mi sidap", "korean noodle"}
+)
+FINAL_QUALITY_BAKING_HINTS = frozenset({"flour", "semolina", "cornstarch", "baking powder", "yeast", "baking mix"})
+FINAL_QUALITY_STOCK_HINTS = frozenset({"stock cube", "stock cubes", "chicken stock", "bouillon", "broth cube"})
+FINAL_QUALITY_MAYO_HINTS = frozenset({"mayo", "mayonnaise", "garlic mayo", "garlic mayonnaise"})
+FINAL_QUALITY_PEANUT_BUTTER_HINTS = frozenset({"peanut butter"})
+FINAL_QUALITY_NUGGET_HINTS = frozenset({"nuggets", "chicken nuggets"})
+FINAL_QUALITY_INSTANT_NOODLE_HINTS = frozenset({"indomie", "instant noodle", "cup noodles", "ramen", "mi sidap"})
+FINAL_QUALITY_DESSERT_HINTS = frozenset(
+    {"dessert", "pudding", "custard", "caramel", "cake", "brownie", "sweet", "jelly", "mousse"}
+)
+FINAL_QUALITY_CREAM_CHEESE_HINTS = frozenset({"cream cheese", "cheese spread", "kiri", "puck", "triangle cheese", "labneh"})
+FINAL_QUALITY_BISCUIT_PLAIN_HINTS = frozenset({"tea biscuits", "tea biscuit", "marie biscuit", "plain biscuit", "biscuits", "biscuit"})
+FINAL_QUALITY_NUTELLA_HINTS = frozenset({"nutella", "hazelnut spread", "chocolate spread"})
+FINAL_QUALITY_STOCK_SEASONING_HINTS = frozenset(
+    {"stock cube", "stock cubes", "bouillon", "seasoning cube", "seasoning cubes", "chicken stock"}
+)
+FINAL_QUALITY_SAVORY_READY_HINTS = frozenset(
+    {
+        "nuggets",
+        "burger",
+        "sausage",
+        "instant noodle",
+        "indomie",
+        "topokki",
+        "ready meal",
+        "frozen meal",
+        "spicy noodles",
+        "mi sidap",
+    }
+)
+FINAL_QUALITY_TUNA_HINTS = frozenset({"tuna"})
+FINAL_QUALITY_RICE_FAMILY_HINTS = frozenset({"rice", "basmati", "sella", "long grain rice", "biryani rice"})
+FINAL_QUALITY_PASTA_FAMILY_HINTS = frozenset(
+    {"pasta", "spaghetti", "macaroni", "penne", "fusilli", "linguine", "vermicelli", "lasagna"}
+)
+FINAL_QUALITY_CRACKER_HINTS = frozenset({"cracker", "crackers"})
+
+HUMAN_SOFT_PENALTY_BY_PATTERN = {
+    "rice_tuna": 0.12,
+    "chicken_tomato_paste": 0.16,
+    "chicken_olive_oil": 0.22,
+    "utilitarian_fat_protein_meal": 0.68,
+    "utilitarian_egg_fat_meal": 0.52,
+    "eggs_feta": 0.08,
+    "labneh_chips": 0.10,
+    "dates_evap_milk": 0.09,
+    "cream_dessert_duplication": 0.30,
+    "biscuits_coconut_milk": 0.22,
+    "milk_cocoa_powder": 0.24,
+    "meal_utilitarian_stock_oil": 0.30,
+    "eggs_tomato_paste": 0.28,
+    "dessert_plain_biscuit": 0.24,
+    "nutella_plain_milk_occasion": 0.24,
+    "meal_rice_meat_overused": 0.22,
+}
+HUMAN_BOOST_BY_PATTERN = {
+    "meal_rice_meat": 0.08,
+    "meal_rice_eggs": 0.12,
+    "meal_chicken_bread_tortilla": 0.30,
+    "meal_eggs_bread": 0.26,
+    "meal_eggs_labneh": 0.24,
+    "meal_spring_roll_cheese": 0.24,
+    "meal_minced_meat_wrap": 0.26,
+    "snack_biscuits_milk": 0.20,
+    "snack_biscuits_chocolate": 0.15,
+    "snack_nutella_bread": 0.26,
+    "snack_chocolate_milk": 0.16,
+    "snack_real_pattern_bonus": 0.16,
+    "occasion_tea_evap_milk": 0.20,
+    "occasion_coffee_evap_milk": 0.20,
+    "occasion_dates_condensed_milk": 0.24,
+    "fastfood_nuggets_bread": 0.28,
+    "fastfood_nuggets_fries": 0.18,
+    "fastfood_burger_bread": 0.18,
+    "fastfood_burger_cheese": 0.16,
+    "fastfood_burger_sauce": 0.14,
+    "meal_labneh_bread": 0.24,
+}
+
+HUMAN_HINTS_CHICKEN = frozenset({"chicken"})
+HUMAN_HINTS_TOMATO_PASTE = frozenset({"tomato paste"})
+HUMAN_HINTS_OLIVE_OIL = frozenset({"olive oil"})
+HUMAN_HINTS_EGGS = frozenset({"eggs", "egg"})
+HUMAN_HINTS_FETA = frozenset({"feta"})
+HUMAN_HINTS_LABNEH = frozenset({"labneh"})
+HUMAN_HINTS_CHIPS = frozenset({"chips", "crisps"})
+HUMAN_HINTS_DATES = frozenset({"dates"})
+HUMAN_HINTS_EVAP_MILK = frozenset({"evaporated milk"})
+HUMAN_HINTS_CONDENSED_MILK = frozenset({"condensed milk"})
+HUMAN_HINTS_RICE = frozenset({"rice", "basmati", "sella", "biryani rice"})
+HUMAN_HINTS_MEAT = frozenset({"meat", "beef", "lamb", "minced beef", "minced lamb"})
+HUMAN_HINTS_BREAD = frozenset({"bread", "toast", "bun"})
+HUMAN_HINTS_TORTILLA = frozenset({"tortilla", "wrap"})
+HUMAN_HINTS_BISCUITS = frozenset({"biscuit", "biscuits", "cookie", "cookies", "wafer", "cracker", "crackers"})
+HUMAN_HINTS_MILK = frozenset({"milk"})
+HUMAN_HINTS_CHOCOLATE = frozenset({"chocolate", "cocoa", "nutella"})
+HUMAN_HINTS_NUTELLA = frozenset({"nutella"})
+HUMAN_HINTS_TEA = frozenset({"tea"})
+HUMAN_HINTS_COFFEE = frozenset({"coffee"})
+HUMAN_HINTS_NUGGETS = frozenset({"nuggets"})
+HUMAN_HINTS_FRIES = frozenset({"fries", "french fries", "potato fries"})
+HUMAN_HINTS_BURGER = frozenset({"burger"})
+HUMAN_HINTS_CHEESE = frozenset({"cheese", "cheddar", "mozzarella", "feta"})
+HUMAN_HINTS_SAUCE = frozenset({"sauce", "ketchup", "mayo", "mayonnaise", "dip"})
+HUMAN_HINTS_COCONUT_MILK = frozenset({"coconut milk"})
+HUMAN_HINTS_COCOA_POWDER = frozenset({"cocoa powder"})
+HUMAN_HINTS_CREAM_TOKEN = frozenset({"cream"})
+HUMAN_HINTS_FISH = frozenset({"fish", "seafood"})
+HUMAN_HINTS_SPRING_ROLL = frozenset({"spring roll", "spring rolls"})
+HUMAN_HINTS_MINCED_MEAT = frozenset({"minced beef", "minced lamb", "ground beef", "ground lamb", "minced"})
+HUMAN_HINTS_STOCK = frozenset({"stock cube", "stock cubes", "bouillon", "seasoning cube", "seasoning cubes", "chicken stock"})
+HUMAN_HINTS_FAT_BASE = frozenset({"oil", "olive oil", "sunflower oil", "ghee", "butter", "margarine"})
+HUMAN_HINTS_PLAIN_COOKING_FAT = frozenset({"oil", "olive oil", "sunflower oil", "vegetable oil", "ghee", "butter"})
+HUMAN_HINTS_PROTEIN_SAVORY = frozenset(
+    {"chicken", "beef", "lamb", "meat", "fish", "seafood", "tuna", "burger", "sausage", "nuggets", "shawarma", "fillet"}
+)
+HUMAN_HINTS_SPICE_SEASONING = frozenset({"spice", "spices", "seasoning", "stock", "bouillon", "masala", "cube"})
+MOTIF_HINTS_MILK_TEA = frozenset({"tea", "coffee", "milk", "evaporated milk", "tea milk"})
+MOTIF_HINTS_DATES_MILK = frozenset({"milk", "evaporated milk", "condensed milk", "fresh cream", "qishta"})
+MOTIF_HINTS_TOMATO_BASE = frozenset({"tomato paste", "tomato sauce", "ketchup"})
+MOTIF_HINTS_CRUNCHY_SNACK = frozenset({"chips", "crisps", "cracker", "crackers", "nachos", "spring roll chips"})
+SHOPPER_FAMILY_BASE_ADJUSTMENT: dict[str, float] = {
+    "meal:chicken_wrap_meal": 0.20,
+    "meal:nuggets_bread_fastmeal": 0.22,
+    "meal:labneh_bread_meal": 0.20,
+    "meal:minced_meat_wrap_meal": 0.18,
+    "meal:egg_breakfast_meal": 0.16,
+    "meal:rice_egg_meal": 0.12,
+    "meal:rice_meat_meal": 0.06,
+    "meal:rice_chicken_meal": 0.04,
+    "meal:chicken_tomato_meal": 0.03,
+    "meal:protein_bread_meal": 0.10,
+    "meal:produce_protein_meal": 0.06,
+    "meal:protein_grain_meal": -0.04,
+    "meal:protein_noodles_meal": -0.10,
+    "meal:protein_starch_generic_meal": -0.12,
+    "snack:biscuit_milk_tea_snack": 0.05,
+    "snack:wafer_chocolate_snack": 0.14,
+    "snack:labneh_crunchy_snack": 0.06,
+    "snack:nutella_snack_pair": 0.14,
+    "snack:cheese_cracker_snack": 0.12,
+    "snack:drink_snack_pair": 0.08,
+    "snack:snack_dairy_pair": 0.06,
+    "snack:dessert_dairy_pair": 0.05,
+    "occasion:tea_milk_drink": 0.10,
+    "occasion:coffee_milk_drink": 0.10,
+    "occasion:dates_milk_treat": 0.24,
+    "occasion:dates_cream_treat": 0.22,
+    "occasion:dessert_cream_treat": 0.18,
+    "occasion:beverage_dairy_treat": 0.12,
+    "occasion:dates_dairy_treat": 0.16,
+    "meal:chicken_fat_utilitarian": -0.55,
+    "meal:protein_oil_utilitarian": -0.60,
+    "meal:egg_fat_utilitarian": -0.40,
+    "meal:fat_spice_utilitarian": -0.46,
+    "meal:protein_plain_fat_utilitarian": -0.54,
+}
+SHOPPER_FAMILY_MEAL_DOMINANT = frozenset(
+    {
+        "meal:rice_meat_meal",
+        "meal:rice_chicken_meal",
+        "meal:chicken_tomato_meal",
+        "meal:chicken_wrap_meal",
+        "meal:chicken_fat_utilitarian",
+        "meal:protein_oil_utilitarian",
+        "meal:protein_plain_fat_utilitarian",
+    }
+)
+SHOPPER_FAMILY_SNACK_DOMINANT = frozenset(
+    {
+        "snack:biscuit_milk_tea_snack",
+        "snack:labneh_crunchy_snack",
+    }
+)
+SHOPPER_FAMILY_OCCASION_DOMINANT = frozenset(
+    {
+        "occasion:tea_milk_drink",
+        "occasion:coffee_milk_drink",
+        "occasion:dates_milk_treat",
+        "occasion:beverage_dairy_treat",
+    }
+)
+SHOPPER_FAMILY_UTILITARIAN = frozenset(
+    {
+        "meal:chicken_fat_utilitarian",
+        "meal:protein_oil_utilitarian",
+        "meal:egg_fat_utilitarian",
+        "meal:fat_spice_utilitarian",
+        "meal:protein_plain_fat_utilitarian",
+    }
+)
+DOMINANT_FAMILY_EXTRA_DECAY_STEP = 0.82
+UTILITARIAN_FAMILY_EXTRA_DECAY_STEP = 0.92
+DOMINANT_MEAL_FAMILY_STRONG_DECAY_STEP = 1.42
+DOMINANT_MEAL_FAMILY_STRONG_DECAY_POWER = 1.28
+STRICT_FALLBACK_CP_MIN = {LANE_MEAL: 26.0, LANE_SNACK: 24.0, LANE_OCCASION: 30.0}
+STRICT_FALLBACK_PAIR_COUNT_MIN = {LANE_MEAL: 10, LANE_SNACK: 9, LANE_OCCASION: 10}
+STRICT_FALLBACK_LANE_FIT_MIN = {LANE_MEAL: 0.64, LANE_SNACK: 0.78, LANE_OCCASION: 0.84}
+STRICT_FALLBACK_TEMPLATE_MIN = {LANE_MEAL: 0.62, LANE_SNACK: 0.78, LANE_OCCASION: 0.80}
+STRICT_FALLBACK_RISK_HINTS = frozenset(
+    {
+        "oil",
+        "ghee",
+        "butter",
+        "spice",
+        "seasoning",
+        "stock cube",
+        "bouillon",
+        "ketchup",
+        "mayo",
+        "mayonnaise",
+        "evaporated milk",
+        "condensed milk",
+    }
+)
+FALLBACK_MOTIF_KEY_TEA_EVAP = "tea_evap_milk"
+FALLBACK_MOTIF_KEY_COFFEE_EVAP = "coffee_evap_milk"
+FALLBACK_MOTIF_KEY_DATES_EVAP = "dates_evap_milk"
+FALLBACK_MOTIF_KEY_DATES_COND = "dates_condensed_milk"
+CONTROLLED_FALLBACK_MOTIFS = frozenset(
+    {
+        FALLBACK_MOTIF_KEY_TEA_EVAP,
+        FALLBACK_MOTIF_KEY_COFFEE_EVAP,
+        FALLBACK_MOTIF_KEY_DATES_EVAP,
+        FALLBACK_MOTIF_KEY_DATES_COND,
+    }
+)
+EVAP_REPETITIVE_FALLBACK_MOTIFS = frozenset(
+    {FALLBACK_MOTIF_KEY_TEA_EVAP, FALLBACK_MOTIF_KEY_COFFEE_EVAP, FALLBACK_MOTIF_KEY_DATES_EVAP}
+)
+MEAL_DOMINANT_MOTIF_KEYWORDS = frozenset(
+    {
+        "meal:rice_meat_meal",
+        "meal:rice_chicken_meal",
+        "meal:chicken_tomato_meal",
+        "meal:chicken_fat_utilitarian",
+        "meal:protein_oil_utilitarian",
+        "meal:protein_plain_fat_utilitarian",
+    }
+)
+SNACK_DOMINANT_MOTIF_KEYWORDS = frozenset(
+    {
+        "snack:biscuit_milk_tea_snack",
+        "snack:wafer_chocolate_snack",
+    }
 )
 NONFOOD_TEXT_HINTS = frozenset(
     {
@@ -2166,6 +2494,700 @@ def _normalised_values(values: dict[int, float]) -> dict[int, float]:
 
 def _token_set(text: str) -> set[str]:
     return {token for token in _normalise_text(text).split() if token}
+
+
+def _text_has_any_hint(text: str, hints: frozenset[str]) -> bool:
+    norm = _normalise_text(text)
+    return any(hint in norm for hint in hints)
+
+
+def _is_plain_milk_beverage_text(text: str) -> bool:
+    norm = _normalise_text(text)
+    if "milk" not in norm:
+        return False
+    if _text_has_any_hint(norm, FINAL_QUALITY_MILK_EXCLUSION_HINTS):
+        return False
+    return _text_has_any_hint(norm, FINAL_QUALITY_MILK_BLOCK_HINTS)
+
+
+def _candidate_pair_fields(
+    candidate: dict[str, object],
+    context: PersonalizationContext,
+) -> tuple[int, int, str, str, str, str, str, str, pd.Series | None]:
+    anchor = int(_safe_int(candidate.get("anchor"), default=-1))
+    complement = int(_safe_int(candidate.get("complement"), default=-1))
+    row = candidate.get("bundle_row")
+    pair_row = row if isinstance(row, pd.Series) else None
+    name_a = _product_name(anchor, context, row=pair_row, side="a")
+    name_b = _product_name(complement, context, row=pair_row, side="b")
+    cat_a = _product_category(anchor, context, row=pair_row, side="a")
+    cat_b = _product_category(complement, context, row=pair_row, side="b")
+    fam_a = _product_family(anchor, context, row=pair_row, side="a")
+    fam_b = _product_family(complement, context, row=pair_row, side="b")
+    return anchor, complement, name_a, name_b, cat_a, cat_b, fam_a, fam_b, pair_row
+
+
+def _pair_matches_hints(text_a: str, text_b: str, left_hints: frozenset[str], right_hints: frozenset[str]) -> bool:
+    return bool(
+        (_text_has_any_hint(text_a, left_hints) and _text_has_any_hint(text_b, right_hints))
+        or (_text_has_any_hint(text_b, left_hints) and _text_has_any_hint(text_a, right_hints))
+    )
+
+
+def _candidate_family_pattern_signature(candidate: dict[str, object], context: PersonalizationContext) -> str:
+    raw = candidate.get("pair_fingerprint")
+    if isinstance(raw, tuple) and len(raw) == 2 and str(raw[0]).strip():
+        lane = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+        return f"{lane}:{str(raw[0]).strip().lower()}"
+    (
+        _anchor,
+        _complement,
+        _name_a,
+        _name_b,
+        _cat_a,
+        _cat_b,
+        fam_a,
+        fam_b,
+        _pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    fam_pair = tuple(sorted((str(fam_a).strip().lower() or "na", str(fam_b).strip().lower() or "nb")))
+    lane = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+    return f"{lane}:{fam_pair[0]}::{fam_pair[1]}"
+
+
+def _candidate_bundle_shape_signature(candidate: dict[str, object], context: PersonalizationContext) -> str:
+    raw = candidate.get("pair_fingerprint")
+    lane = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+    theme = str(candidate.get("theme", "")).strip().lower() or "none"
+    relation = str(candidate.get("pair_relation", "")).strip().lower() or "none"
+    if isinstance(raw, tuple) and len(raw) == 2 and str(raw[1]).strip():
+        return f"{lane}:{str(raw[1]).strip().lower()}:{theme}:{relation}"
+    (
+        anchor,
+        complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    groups_a = _group_labels_from_text(name_a, cat_a, fam_a)
+    groups_b = _group_labels_from_text(name_b, cat_b, fam_b)
+    sem_a = _product_semantic_group(anchor, context, row=pair_row, side="a")
+    sem_b = _product_semantic_group(complement, context, row=pair_row, side="b")
+    group_pair = tuple(sorted((_primary_group(groups_a), _primary_group(groups_b))))
+    sem_pair = tuple(sorted((str(sem_a), str(sem_b))))
+    return f"{lane}:{group_pair[0]}::{group_pair[1]}:{sem_pair[0]}::{sem_pair[1]}:{theme}:{relation}"
+
+
+def _fallback_shopper_family_signature(
+    lane: str,
+    groups_a: set[str],
+    groups_b: set[str],
+    relation: str,
+) -> str:
+    primary_a = str(_primary_group(groups_a))
+    primary_b = str(_primary_group(groups_b))
+    group_pair = tuple(sorted((primary_a, primary_b)))
+    rel = str(relation).strip().lower() or "pair"
+    lane_key = str(lane).strip().lower() or LANE_MEAL
+    pair_set = {primary_a, primary_b}
+    if lane_key == LANE_MEAL:
+        if GROUP_RICE_GRAINS in pair_set and GROUP_PROTEIN in pair_set:
+            return "meal:protein_grain_meal"
+        if GROUP_BREAD_CARB in pair_set and GROUP_PROTEIN in pair_set:
+            return "meal:protein_bread_meal"
+        if GROUP_NOODLES_PASTA in pair_set and GROUP_PROTEIN in pair_set:
+            return "meal:protein_noodles_meal"
+        if GROUP_PRODUCE in pair_set and GROUP_PROTEIN in pair_set:
+            return "meal:produce_protein_meal"
+        if GROUP_RICE_GRAINS in pair_set and GROUP_PRODUCE in pair_set:
+            return "meal:produce_grain_meal"
+        if GROUP_PROTEIN in pair_set and (GROUP_RICE_GRAINS in pair_set or GROUP_BREAD_CARB in pair_set or GROUP_NOODLES_PASTA in pair_set):
+            return "meal:protein_starch_generic_meal"
+    if lane_key == LANE_SNACK:
+        beverage_groups = {GROUP_TEA, GROUP_COFFEE, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}
+        snack_groups = {GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS, GROUP_SNACKS}
+        dairy_groups = {GROUP_DAIRY, GROUP_MILK, GROUP_CREAM, GROUP_CREAM_CHEESE, GROUP_CHEESE}
+        dessert_groups = {GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_DATES, GROUP_SWEETS}
+        union = set(groups_a) | set(groups_b)
+        if union & snack_groups and union & beverage_groups:
+            return "snack:drink_snack_pair"
+        if union & snack_groups and union & dairy_groups:
+            return "snack:snack_dairy_pair"
+        if union & dessert_groups and union & dairy_groups:
+            return "snack:dessert_dairy_pair"
+    if lane_key == LANE_OCCASION:
+        beverage_groups = {GROUP_TEA, GROUP_COFFEE, GROUP_BEVERAGES}
+        dairy_groups = {GROUP_DAIRY, GROUP_MILK, GROUP_CREAM, GROUP_CREAM_CHEESE, GROUP_CHEESE}
+        union = set(groups_a) | set(groups_b)
+        if union & beverage_groups and union & dairy_groups:
+            return "occasion:beverage_dairy_treat"
+        if GROUP_DATES in union and union & dairy_groups:
+            return "occasion:dates_dairy_treat"
+    return f"{lane_key}:{group_pair[0]}_{group_pair[1]}_{rel}_family"
+
+
+def _shopper_visible_family_signature(
+    lane: str,
+    text_a: str,
+    text_b: str,
+    groups_a: set[str],
+    groups_b: set[str],
+) -> str:
+    lane_key = str(lane).strip().lower()
+    if lane_key == LANE_MEAL:
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_NUGGETS, HUMAN_HINTS_BREAD | HUMAN_HINTS_FRIES):
+            return "meal:nuggets_bread_fastmeal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MINCED_MEAT, HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD):
+            return "meal:minced_meat_wrap_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD):
+            return "meal:chicken_wrap_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_LABNEH, HUMAN_HINTS_BREAD):
+            return "meal:labneh_bread_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_BREAD):
+            return "meal:egg_breakfast_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_EGGS):
+            return "meal:rice_egg_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_CHICKEN):
+            return "meal:rice_chicken_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH):
+            return "meal:rice_meat_meal"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, MOTIF_HINTS_TOMATO_BASE):
+            return "meal:chicken_tomato_meal"
+
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_PLAIN_COOKING_FAT):
+            return "meal:egg_fat_utilitarian"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_PLAIN_COOKING_FAT, HUMAN_HINTS_SPICE_SEASONING):
+            return "meal:fat_spice_utilitarian"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_PLAIN_COOKING_FAT):
+            return "meal:chicken_fat_utilitarian"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_PROTEIN_SAVORY, HUMAN_HINTS_PLAIN_COOKING_FAT):
+            return "meal:protein_plain_fat_utilitarian"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_FAT_BASE, HUMAN_HINTS_PROTEIN_SAVORY):
+            return "meal:protein_oil_utilitarian"
+        return ""
+
+    if lane_key == LANE_SNACK:
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_LABNEH, HUMAN_HINTS_CHIPS | MOTIF_HINTS_CRUNCHY_SNACK):
+            return "snack:labneh_crunchy_snack"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHEESE, frozenset({"cracker", "crackers", "biscuit", "biscuits"})):
+            return "snack:cheese_cracker_snack"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_NUTELLA, HUMAN_HINTS_BREAD | HUMAN_HINTS_BISCUITS):
+            return "snack:nutella_snack_pair"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BISCUITS, MOTIF_HINTS_MILK_TEA):
+            return "snack:biscuit_milk_tea_snack"
+        if _pair_matches_hints(text_a, text_b, frozenset({"wafer", "wafer biscuit", "cookies", "biscrem"}), HUMAN_HINTS_CHOCOLATE):
+            return "snack:wafer_chocolate_snack"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BISCUITS, HUMAN_HINTS_CHOCOLATE):
+            return "snack:wafer_chocolate_snack"
+        if (set(groups_a) | set(groups_b)) & {GROUP_CHIPS, GROUP_SNACKS} and (set(groups_a) | set(groups_b)) & {
+            GROUP_SODA,
+            GROUP_JUICE,
+            GROUP_TEA,
+            GROUP_COFFEE,
+            GROUP_BEVERAGES,
+        }:
+            return "snack:drink_snack_pair"
+        if (set(groups_a) | set(groups_b)) & {GROUP_SNACKS, GROUP_CHIPS, GROUP_COOKIES, GROUP_CHOCOLATE} and (
+            (set(groups_a) | set(groups_b))
+            & {GROUP_DAIRY, GROUP_MILK, GROUP_CREAM, GROUP_CREAM_CHEESE, GROUP_CHEESE}
+        ):
+            return "snack:snack_dairy_pair"
+        return ""
+
+    if lane_key == LANE_OCCASION:
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_DATES, HUMAN_HINTS_CREAM_TOKEN):
+            return "occasion:dates_cream_treat"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_DATES, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK | HUMAN_HINTS_CONDENSED_MILK):
+            return "occasion:dates_milk_treat"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_COFFEE, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK):
+            return "occasion:coffee_milk_drink"
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_TEA, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK):
+            return "occasion:tea_milk_drink"
+        if _pair_matches_hints(text_a, text_b, FINAL_QUALITY_DESSERT_HINTS, HUMAN_HINTS_CREAM_TOKEN):
+            return "occasion:dessert_cream_treat"
+        union = set(groups_a) | set(groups_b)
+        if union & {GROUP_TEA, GROUP_COFFEE, GROUP_BEVERAGES} and union & {
+            GROUP_DAIRY,
+            GROUP_MILK,
+            GROUP_CREAM,
+            GROUP_CREAM_CHEESE,
+            GROUP_CHEESE,
+        }:
+            return "occasion:beverage_dairy_treat"
+        if GROUP_DATES in union and union & {GROUP_DAIRY, GROUP_MILK, GROUP_CREAM, GROUP_CREAM_CHEESE, GROUP_CHEESE}:
+            return "occasion:dates_dairy_treat"
+        return ""
+
+    if lane_key == LANE_NONFOOD:
+        return "nonfood:household_bundle"
+
+    del groups_a, groups_b
+    return ""
+
+
+def _candidate_motif_family_signature(candidate: dict[str, object], context: PersonalizationContext) -> str:
+    existing = str(candidate.get("motif_family_signature", "")).strip().lower()
+    if existing:
+        return existing
+    (
+        _anchor,
+        _complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        _pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    lane = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+    groups_a = _group_labels_from_text(name_a, cat_a, fam_a)
+    groups_b = _group_labels_from_text(name_b, cat_b, fam_b)
+    shopper_family = _shopper_visible_family_signature(lane, text_a, text_b, groups_a, groups_b)
+    if shopper_family:
+        return str(shopper_family)
+    relation = str(candidate.get("pair_relation", "")).strip().lower()
+    return _fallback_shopper_family_signature(lane, groups_a, groups_b, relation)
+
+
+def _is_utilitarian_shopper_family_signature(signature: str) -> bool:
+    sig = str(signature or "").strip().lower()
+    if not sig:
+        return False
+    if sig in SHOPPER_FAMILY_UTILITARIAN:
+        return True
+    if "utilitarian" in sig:
+        return True
+    if sig.startswith(f"{LANE_MEAL}:") and ("_plain_fat_" in sig or "_fat_" in sig):
+        return True
+    return False
+
+
+def _is_dominant_shopper_family_signature(signature: str) -> bool:
+    sig = str(signature or "").strip().lower()
+    if not sig:
+        return False
+    if (
+        sig in SHOPPER_FAMILY_MEAL_DOMINANT
+        or sig in SHOPPER_FAMILY_SNACK_DOMINANT
+        or sig in SHOPPER_FAMILY_OCCASION_DOMINANT
+    ):
+        return True
+    if sig.startswith(f"{LANE_MEAL}:"):
+        if "utilitarian" in sig:
+            return True
+        if any(
+            token in sig
+            for token in (
+                "rice_meat_meal",
+                "rice_chicken_meal",
+                "protein_grain_meal",
+                "protein_starch_generic_meal",
+                "chicken_tomato_meal",
+            )
+        ):
+            return True
+    return False
+
+
+def _is_meal_dominant_motif_signature(signature: str) -> bool:
+    sig = str(signature or "").strip().lower()
+    if not sig or not sig.startswith(f"{LANE_MEAL}:"):
+        return False
+    if _is_dominant_shopper_family_signature(sig):
+        return True
+    return any(keyword in sig for keyword in MEAL_DOMINANT_MOTIF_KEYWORDS)
+
+
+def _is_meal_dominant_pair_text(text_a: str, text_b: str) -> bool:
+    rice_meat = _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_MEAT | HUMAN_HINTS_CHICKEN | HUMAN_HINTS_FISH)
+    rice_eggs = _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_EGGS)
+    chicken_oil = _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_OLIVE_OIL | frozenset({"oil", "ghee"}))
+    chicken_tomato = _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_TOMATO_PASTE)
+    return bool(rice_meat or rice_eggs or chicken_oil or chicken_tomato)
+
+
+def _progressive_exposure_penalty(count: int, base_penalty: float, threshold: int) -> float:
+    exposure = max(0, int(count))
+    if exposure <= 0 or float(base_penalty) <= 0.0:
+        return 0.0
+    linear = float(base_penalty) * float(exposure)
+    over = max(0, exposure - int(threshold))
+    if over <= 0:
+        return linear
+    surge = float(base_penalty) * EXPOSURE_SURGE_MULTIPLIER * float(over ** EXPOSURE_SURGE_POWER)
+    return float(linear + surge)
+
+
+def _human_preference_score_adjustment(candidate: dict[str, object], context: PersonalizationContext) -> float:
+    (
+        _anchor,
+        _complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        _pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    lane = str(candidate.get("lane", "")).strip().lower()
+    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+    adjustment = 0.0
+
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["rice_tuna"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_OLIVE_OIL | frozenset({"oil", "ghee"}), HUMAN_HINTS_STOCK):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["meal_utilitarian_stock_oil"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_TOMATO_PASTE):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["chicken_tomato_paste"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_OLIVE_OIL):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["chicken_olive_oil"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_TOMATO_PASTE):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["eggs_tomato_paste"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_FETA):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["eggs_feta"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_LABNEH, HUMAN_HINTS_CHIPS):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["labneh_chips"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_DATES, HUMAN_HINTS_EVAP_MILK):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["dates_evap_milk"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BISCUITS, HUMAN_HINTS_COCONUT_MILK):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["biscuits_coconut_milk"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MILK, HUMAN_HINTS_COCOA_POWDER):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["milk_cocoa_powder"])
+    if _pair_matches_hints(text_a, text_b, FINAL_QUALITY_DESSERT_HINTS, FINAL_QUALITY_BISCUIT_PLAIN_HINTS):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["dessert_plain_biscuit"])
+    if (
+        lane == LANE_OCCASION
+        and _pair_matches_hints(text_a, text_b, FINAL_QUALITY_NUTELLA_HINTS, HUMAN_HINTS_MILK)
+        and (_is_plain_milk_beverage_text(text_a) or _is_plain_milk_beverage_text(text_b))
+    ):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["nutella_plain_milk_occasion"])
+    if (
+        _text_has_any_hint(text_a, HUMAN_HINTS_CREAM_TOKEN)
+        and _text_has_any_hint(text_b, HUMAN_HINTS_CREAM_TOKEN)
+        and (_text_has_any_hint(text_a, FINAL_QUALITY_DESSERT_HINTS) or _text_has_any_hint(text_b, FINAL_QUALITY_DESSERT_HINTS))
+    ):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["cream_dessert_duplication"])
+
+    if lane == LANE_MEAL:
+        fat_protein_pair = _pair_matches_hints(
+            text_a,
+            text_b,
+            HUMAN_HINTS_FAT_BASE,
+            HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH,
+        )
+        fat_egg_pair = _pair_matches_hints(text_a, text_b, HUMAN_HINTS_FAT_BASE, HUMAN_HINTS_EGGS)
+        has_real_dish_pattern = bool(
+            _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA)
+            or _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_MEAT | HUMAN_HINTS_EGGS)
+            or _pair_matches_hints(text_a, text_b, MOTIF_HINTS_TOMATO_BASE, HUMAN_HINTS_CHICKEN)
+            or _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MINCED_MEAT, HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD)
+            or _pair_matches_hints(text_a, text_b, HUMAN_HINTS_SPRING_ROLL, HUMAN_HINTS_CHEESE)
+        )
+        if fat_protein_pair and not has_real_dish_pattern:
+            adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["utilitarian_fat_protein_meal"])
+        if fat_egg_pair and not has_real_dish_pattern:
+            adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["utilitarian_egg_fat_meal"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_MEAT | HUMAN_HINTS_CHICKEN):
+            adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["meal_rice_meat_overused"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_MEAT):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_rice_meat"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, HUMAN_HINTS_EGGS):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_rice_eggs"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_chicken_bread_tortilla"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_BREAD):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_eggs_bread"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_LABNEH):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_eggs_labneh"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_SPRING_ROLL, HUMAN_HINTS_CHEESE):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_spring_roll_cheese"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MINCED_MEAT, HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_minced_meat_wrap"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_LABNEH, HUMAN_HINTS_BREAD):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["meal_labneh_bread"])
+    if lane == LANE_SNACK:
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BISCUITS, HUMAN_HINTS_MILK):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["snack_biscuits_milk"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BISCUITS, HUMAN_HINTS_CHOCOLATE):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["snack_biscuits_chocolate"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_NUTELLA, HUMAN_HINTS_BREAD):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["snack_nutella_bread"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHOCOLATE, HUMAN_HINTS_MILK):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["snack_chocolate_milk"])
+        if str(candidate.get("snack_pattern", "")).strip():
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["snack_real_pattern_bonus"])
+    if lane == LANE_OCCASION:
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_TEA, HUMAN_HINTS_EVAP_MILK):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["occasion_tea_evap_milk"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_COFFEE, HUMAN_HINTS_EVAP_MILK):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["occasion_coffee_evap_milk"])
+        if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_DATES, HUMAN_HINTS_CONDENSED_MILK):
+            adjustment += float(HUMAN_BOOST_BY_PATTERN["occasion_dates_condensed_milk"])
+
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_NUGGETS, HUMAN_HINTS_BREAD):
+        adjustment += float(HUMAN_BOOST_BY_PATTERN["fastfood_nuggets_bread"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_NUGGETS, HUMAN_HINTS_FRIES):
+        adjustment += float(HUMAN_BOOST_BY_PATTERN["fastfood_nuggets_fries"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BURGER, HUMAN_HINTS_BREAD):
+        adjustment += float(HUMAN_BOOST_BY_PATTERN["fastfood_burger_bread"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BURGER, HUMAN_HINTS_CHEESE):
+        adjustment += float(HUMAN_BOOST_BY_PATTERN["fastfood_burger_cheese"])
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BURGER, HUMAN_HINTS_SAUCE):
+        adjustment += float(HUMAN_BOOST_BY_PATTERN["fastfood_burger_sauce"])
+
+    return float(adjustment)
+
+
+def _controlled_fallback_motif_key(candidate: dict[str, object], context: PersonalizationContext) -> str:
+    source_group = _source_group_from_source(str(candidate.get("source", "")))
+    if source_group != "fallback_food":
+        return ""
+    (
+        _anchor,
+        _complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        _pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+    pair_text = f"{text_a}::{text_b}"
+    if _text_has_any_hint(pair_text, frozenset({"tea"})) and _text_has_any_hint(pair_text, frozenset({"evaporated milk"})):
+        return FALLBACK_MOTIF_KEY_TEA_EVAP
+    if _text_has_any_hint(pair_text, frozenset({"coffee"})) and _text_has_any_hint(pair_text, frozenset({"evaporated milk"})):
+        return FALLBACK_MOTIF_KEY_COFFEE_EVAP
+    if _text_has_any_hint(pair_text, frozenset({"dates"})) and _text_has_any_hint(pair_text, frozenset({"evaporated milk"})):
+        return FALLBACK_MOTIF_KEY_DATES_EVAP
+    if _text_has_any_hint(pair_text, frozenset({"dates"})) and _text_has_any_hint(pair_text, frozenset({"condensed milk"})):
+        return FALLBACK_MOTIF_KEY_DATES_COND
+    return ""
+
+
+def _final_human_quality_reject_reason(
+    anchor: int,
+    complement: int,
+    lane: str,
+    context: PersonalizationContext,
+    *,
+    pair_row: pd.Series | None = None,
+) -> str | None:
+    if int(anchor) <= 0 or int(complement) <= 0 or int(anchor) == int(complement):
+        return "invalid_pair"
+    if lane not in FOOD_LANE_ORDER:
+        return None
+    analysis = _pair_analysis(int(anchor), int(complement), lane, context, pair_row=pair_row)
+    text_a = semantics.normalize_product_text(analysis.anchor_name, analysis.anchor_category, analysis.anchor_family)
+    text_b = semantics.normalize_product_text(analysis.complement_name, analysis.complement_category, analysis.complement_family)
+    text_pair = f"{text_a}::{text_b}"
+
+    tuna_a = _text_has_any_hint(text_a, FINAL_QUALITY_TUNA_HINTS)
+    tuna_b = _text_has_any_hint(text_b, FINAL_QUALITY_TUNA_HINTS)
+    rice_family_a = _text_has_any_hint(text_a, FINAL_QUALITY_RICE_FAMILY_HINTS) and not _text_has_any_hint(
+        text_a, FINAL_QUALITY_CRACKER_HINTS
+    )
+    rice_family_b = _text_has_any_hint(text_b, FINAL_QUALITY_RICE_FAMILY_HINTS) and not _text_has_any_hint(
+        text_b, FINAL_QUALITY_CRACKER_HINTS
+    )
+    pasta_family_a = _text_has_any_hint(text_a, FINAL_QUALITY_PASTA_FAMILY_HINTS)
+    pasta_family_b = _text_has_any_hint(text_b, FINAL_QUALITY_PASTA_FAMILY_HINTS)
+    if (tuna_a and (rice_family_b or pasta_family_b)) or (tuna_b and (rice_family_a or pasta_family_a)):
+        return "tuna_with_rice_or_pasta_pair"
+    milk_a = _is_plain_milk_beverage_text(text_a)
+    milk_b = _is_plain_milk_beverage_text(text_b)
+    if (tuna_a and milk_b) or (tuna_b and milk_a):
+        return "tuna_milk_pair"
+    peanut_a = _text_has_any_hint(text_a, FINAL_QUALITY_PEANUT_BUTTER_HINTS)
+    peanut_b = _text_has_any_hint(text_b, FINAL_QUALITY_PEANUT_BUTTER_HINTS)
+    if (tuna_a and peanut_b) or (tuna_b and peanut_a):
+        return "tuna_peanut_butter_pair"
+
+    noodles_a = _text_has_any_hint(text_a, FINAL_QUALITY_NOODLE_HINTS)
+    noodles_b = _text_has_any_hint(text_b, FINAL_QUALITY_NOODLE_HINTS)
+    baking_a = _text_has_any_hint(text_a, FINAL_QUALITY_BAKING_HINTS)
+    baking_b = _text_has_any_hint(text_b, FINAL_QUALITY_BAKING_HINTS)
+    if (noodles_a and baking_b) or (noodles_b and baking_a):
+        return "noodles_baking_pair"
+    spicy_a = _text_has_any_hint(text_a, frozenset({"spicy"}))
+    spicy_b = _text_has_any_hint(text_b, frozenset({"spicy"}))
+    if ((noodles_a and spicy_a) and baking_b) or ((noodles_b and spicy_b) and baking_a):
+        return "spicy_noodles_baking_pair"
+    savory_protein_baking = _pair_matches_hints(
+        text_a,
+        text_b,
+        HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH,
+        FINAL_QUALITY_BAKING_HINTS,
+    )
+    egg_baking_pair = _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, FINAL_QUALITY_BAKING_HINTS)
+    if savory_protein_baking and not egg_baking_pair:
+        return "savory_protein_baking_pair"
+
+    stock_a = _text_has_any_hint(text_a, FINAL_QUALITY_STOCK_HINTS)
+    stock_b = _text_has_any_hint(text_b, FINAL_QUALITY_STOCK_HINTS)
+    stock_seasoning_a = _text_has_any_hint(text_a, FINAL_QUALITY_STOCK_SEASONING_HINTS)
+    stock_seasoning_b = _text_has_any_hint(text_b, FINAL_QUALITY_STOCK_SEASONING_HINTS)
+    mayo_a = _text_has_any_hint(text_a, FINAL_QUALITY_MAYO_HINTS)
+    mayo_b = _text_has_any_hint(text_b, FINAL_QUALITY_MAYO_HINTS)
+    if (stock_a and mayo_b) or (stock_b and mayo_a):
+        return "stock_mayo_pair"
+
+    oil_a = _is_fat_or_oil_item(analysis.anchor_name, analysis.anchor_category, analysis.anchor_family)
+    oil_b = _is_fat_or_oil_item(analysis.complement_name, analysis.complement_category, analysis.complement_family)
+    if (oil_a and stock_seasoning_b) or (oil_b and stock_seasoning_a):
+        return "oil_stock_seasoning_pair"
+    nugget_a = _text_has_any_hint(text_a, FINAL_QUALITY_NUGGET_HINTS)
+    nugget_b = _text_has_any_hint(text_b, FINAL_QUALITY_NUGGET_HINTS)
+    if (oil_a and nugget_b) or (oil_b and nugget_a):
+        return "oil_nuggets_pair"
+
+    instant_noodle_a = _text_has_any_hint(text_a, FINAL_QUALITY_INSTANT_NOODLE_HINTS)
+    instant_noodle_b = _text_has_any_hint(text_b, FINAL_QUALITY_INSTANT_NOODLE_HINTS)
+    if (oil_a and instant_noodle_b) or (oil_b and instant_noodle_a):
+        return "oil_instant_noodles_pair"
+
+    cream_cheese_a = _text_has_any_hint(text_a, FINAL_QUALITY_CREAM_CHEESE_HINTS)
+    cream_cheese_b = _text_has_any_hint(text_b, FINAL_QUALITY_CREAM_CHEESE_HINTS)
+    dessert_a = _text_has_any_hint(text_a, FINAL_QUALITY_DESSERT_HINTS)
+    dessert_b = _text_has_any_hint(text_b, FINAL_QUALITY_DESSERT_HINTS)
+    if (cream_cheese_a and dessert_b) or (cream_cheese_b and dessert_a):
+        return "cream_cheese_dessert_pair"
+    cake_a = _text_has_any_hint(text_a, frozenset({"cake"}))
+    cake_b = _text_has_any_hint(text_b, frozenset({"cake"}))
+    if (cake_a and cream_cheese_b and dessert_a) or (cake_b and cream_cheese_a and dessert_b):
+        return "cake_cream_cheese_duplication"
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_EGGS, HUMAN_HINTS_TOMATO_PASTE):
+        return "eggs_tomato_paste_pair"
+    if _pair_matches_hints(text_a, text_b, FINAL_QUALITY_DESSERT_HINTS, FINAL_QUALITY_BISCUIT_PLAIN_HINTS):
+        return "dessert_plain_biscuit_pair"
+    if ((dessert_a and milk_b) or (dessert_b and milk_a)) and not _pair_matches_hints(
+        text_a,
+        text_b,
+        HUMAN_HINTS_CHOCOLATE,
+        HUMAN_HINTS_MILK,
+    ):
+        return "dessert_plain_milk_pair"
+    if (
+        lane == LANE_OCCASION
+        and _pair_matches_hints(text_a, text_b, FINAL_QUALITY_NUTELLA_HINTS, HUMAN_HINTS_MILK)
+        and (_is_plain_milk_beverage_text(text_a) or _is_plain_milk_beverage_text(text_b))
+    ):
+        return "nutella_plain_milk_occasion_pair"
+
+    protein_milk = (
+        (semantics.ROLE_PROTEIN in analysis.anchor_roles and milk_b)
+        or (semantics.ROLE_PROTEIN in analysis.complement_roles and milk_a)
+    )
+    if protein_milk:
+        relation = str(analysis.semantic.relation)
+        strength = str(analysis.semantic.strength)
+        allows_display = bool(
+            lane in {LANE_SNACK, LANE_OCCASION}
+            and relation in {semantics.REL_DRINK, semantics.REL_DESSERT}
+            and strength == semantics.STRENGTH_STRONG
+        )
+        if not allows_display:
+            return "protein_dairy_beverage_pair"
+
+    savory_ready_a = _text_has_any_hint(text_a, FINAL_QUALITY_SAVORY_READY_HINTS)
+    savory_ready_b = _text_has_any_hint(text_b, FINAL_QUALITY_SAVORY_READY_HINTS)
+    if (savory_ready_a and baking_b) or (savory_ready_b and baking_a):
+        return "savory_ready_baking_pair"
+
+    if _text_has_any_hint(text_pair, frozenset({"stock cube", "bouillon"})) and _text_has_any_hint(
+        text_pair, frozenset({"garlic mayo", "mayonnaise", "mayo"})
+    ):
+        return "stock_mayo_pair"
+
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MILK, HUMAN_HINTS_COCOA_POWDER):
+        return "milk_cocoa_powder_pair"
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_BISCUITS, HUMAN_HINTS_COCONUT_MILK):
+        return "biscuits_coconut_milk_pair"
+    if (
+        _text_has_any_hint(text_a, HUMAN_HINTS_CREAM_TOKEN)
+        and _text_has_any_hint(text_b, HUMAN_HINTS_CREAM_TOKEN)
+        and (_text_has_any_hint(text_a, FINAL_QUALITY_DESSERT_HINTS) or _text_has_any_hint(text_b, FINAL_QUALITY_DESSERT_HINTS))
+    ):
+        return "cream_dessert_duplication_pair"
+
+    return None
+
+
+def _fallback_quality_reject_reason(candidate: dict[str, object], context: PersonalizationContext) -> str | None:
+    source_group = _source_group_from_source(str(candidate.get("source", "")))
+    if source_group != "fallback_food":
+        return None
+    lane = str(candidate.get("lane", "")).strip().lower()
+    if lane not in FOOD_LANE_ORDER:
+        return None
+    strength = str(candidate.get("pair_strength", "")).strip()
+    cp_score = float(candidate.get("cp_score", 0.0))
+    pair_count = int(_safe_int(candidate.get("pair_count"), default=0))
+    lane_fit = float(candidate.get("lane_fit_score", 0.0))
+    template_strength = float(candidate.get("template_strength", 0.0))
+    category_strength = float(candidate.get("category_strength", 0.0))
+    recipe = float(candidate.get("recipe_compat", 0.0))
+    prior_bonus = float(candidate.get("prior_bonus", 0.0))
+
+    if strength == semantics.STRENGTH_TRASH or strength == semantics.STRENGTH_WEAK:
+        return "fallback_weak_strength"
+    if lane in {LANE_SNACK, LANE_OCCASION} and strength != semantics.STRENGTH_STRONG:
+        return "fallback_non_strong_in_snack_occasion"
+    if cp_score < float(STRICT_FALLBACK_CP_MIN.get(lane, 0.0)):
+        return "fallback_cp_too_low"
+    if pair_count < int(STRICT_FALLBACK_PAIR_COUNT_MIN.get(lane, 0)):
+        return "fallback_pair_count_too_low"
+    if lane_fit < float(STRICT_FALLBACK_LANE_FIT_MIN.get(lane, 0.0)):
+        return "fallback_lane_fit_too_low"
+    if template_strength < float(STRICT_FALLBACK_TEMPLATE_MIN.get(lane, 0.0)) and category_strength < 0.66:
+        return "fallback_template_quality_too_low"
+
+    (
+        _anchor,
+        _complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        _pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+    text_pair = f"{text_a}::{text_b}"
+    has_risky_hint = _text_has_any_hint(text_pair, STRICT_FALLBACK_RISK_HINTS)
+    if has_risky_hint:
+        if cp_score < 34.0 or pair_count < 14:
+            return "fallback_risky_evidence_too_low"
+        if template_strength < 0.80 and category_strength < 0.72:
+            return "fallback_risky_pattern_too_weak"
+        if recipe < 0.16 and prior_bonus <= 0.0:
+            return "fallback_risky_recipe_support_too_low"
+
+    motif_key = _controlled_fallback_motif_key(candidate, context)
+    if motif_key in EVAP_REPETITIVE_FALLBACK_MOTIFS:
+        if cp_score < 32.0 or pair_count < 12:
+            return "fallback_evap_motif_evidence_too_low"
+        if template_strength < 0.82 and lane == LANE_OCCASION:
+            return "fallback_evap_motif_template_too_low"
+
+    if _is_plain_milk_beverage_text(text_a) or _is_plain_milk_beverage_text(text_b):
+        if lane == LANE_MEAL and prior_bonus <= 0.0 and recipe < 0.18:
+            return "fallback_plain_milk_meal_reject"
+
+    return None
 
 
 def _normalize_name_tokens(name: str) -> set[str]:
@@ -4667,6 +5689,13 @@ def _rng_for_profile(run_id: str | None, profile_id: str, rng_salt: str | None =
     return random.Random(seed_int)
 
 
+def _profile_seed_key(profile: PersonProfile) -> str:
+    source = str(profile.source).strip().lower() or "unknown"
+    orders = ",".join(str(int(oid)) for oid in sorted(int(oid) for oid in profile.order_ids))
+    history = ",".join(str(int(pid)) for pid in sorted(int(pid) for pid in profile.history_product_ids))
+    return f"{source}|{orders}|{history}"
+
+
 def _source_priority_rank(source: str) -> int:
     source_group = _source_group_from_source(source)
     source_priority_map = {
@@ -4691,14 +5720,125 @@ def _candidate_effective_score(
     context: PersonalizationContext,
     global_pair_exposure: dict[tuple[int, int], int],
     global_template_exposure: dict[str, int],
+    global_fallback_motif_exposure: dict[str, int] | None = None,
+    global_motif_family_exposure: dict[str, int] | None = None,
+    global_family_pattern_exposure: dict[str, int] | None = None,
+    global_bundle_shape_exposure: dict[str, int] | None = None,
 ) -> float:
     score = float(candidate.get("pool_score", candidate.get("personal_score", 0.0)))
     source_group = _source_group_from_source(str(candidate.get("source", "")))
     pair_key = _candidate_pair_key(candidate)
     template_signature = _template_signature(candidate, context)
     theme = str(candidate.get("theme", "")).strip().lower()
-    score -= EXPOSURE_PAIR_PENALTY * float(global_pair_exposure.get(pair_key, 0))
-    score -= EXPOSURE_TEMPLATE_SIGNATURE_PENALTY * float(global_template_exposure.get(template_signature, 0))
+    lane = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+    pair_exposure = int(global_pair_exposure.get(pair_key, 0))
+    template_exposure = int(global_template_exposure.get(template_signature, 0))
+    score -= _progressive_exposure_penalty(
+        pair_exposure,
+        EXPOSURE_PAIR_PENALTY,
+        threshold=EXPOSURE_SURGE_THRESHOLD_PAIR,
+    )
+    score -= _progressive_exposure_penalty(
+        template_exposure,
+        EXPOSURE_TEMPLATE_SIGNATURE_PENALTY,
+        threshold=EXPOSURE_SURGE_THRESHOLD_TEMPLATE,
+    )
+    motif_family_signature = _candidate_motif_family_signature(candidate, context)
+    family_pattern_signature = _candidate_family_pattern_signature(candidate, context)
+    bundle_shape_signature = _candidate_bundle_shape_signature(candidate, context)
+    motif_family_exposure_map = global_motif_family_exposure or {}
+    family_pattern_exposure_map = global_family_pattern_exposure or {}
+    bundle_shape_exposure_map = global_bundle_shape_exposure or {}
+    motif_family_exposure = int(motif_family_exposure_map.get(motif_family_signature, 0))
+    family_pattern_exposure = int(family_pattern_exposure_map.get(family_pattern_signature, 0))
+    bundle_shape_exposure = int(bundle_shape_exposure_map.get(bundle_shape_signature, 0))
+    dominant_family = _is_dominant_shopper_family_signature(motif_family_signature)
+    utilitarian_family = _is_utilitarian_shopper_family_signature(motif_family_signature)
+    score += float(SHOPPER_FAMILY_BASE_ADJUSTMENT.get(motif_family_signature, 0.0))
+    meal_dominant_candidate = False
+    score -= _progressive_exposure_penalty(
+        motif_family_exposure,
+        EXPOSURE_MOTIF_FAMILY_PENALTY,
+        threshold=EXPOSURE_SURGE_THRESHOLD_MOTIF,
+    )
+    if lane == LANE_MEAL and dominant_family and motif_family_exposure >= 2:
+        score -= float(DOMINANT_MEAL_FAMILY_STRONG_DECAY_STEP) * float(
+            (motif_family_exposure - 1) ** DOMINANT_MEAL_FAMILY_STRONG_DECAY_POWER
+        )
+    elif dominant_family and motif_family_exposure >= 3:
+        score -= 0.58 * float((motif_family_exposure - 2) ** 1.2)
+    if lane == LANE_OCCASION and motif_family_signature in SHOPPER_FAMILY_OCCASION_DOMINANT and motif_family_exposure >= 2:
+        score -= 0.52 * float((motif_family_exposure - 1) ** 1.12)
+    if utilitarian_family and motif_family_exposure >= 1:
+        score -= float(UTILITARIAN_FAMILY_EXTRA_DECAY_STEP) * float(motif_family_exposure)
+    if motif_family_signature in SHOPPER_FAMILY_SNACK_DOMINANT and motif_family_exposure >= 2:
+        score -= 0.95 * float((motif_family_exposure - 1) ** 1.15)
+    score -= _progressive_exposure_penalty(
+        family_pattern_exposure,
+        EXPOSURE_FAMILY_PATTERN_PENALTY,
+        threshold=EXPOSURE_SURGE_THRESHOLD_FAMILY,
+    )
+    score -= _progressive_exposure_penalty(
+        bundle_shape_exposure,
+        EXPOSURE_BUNDLE_SHAPE_PENALTY,
+        threshold=EXPOSURE_SURGE_THRESHOLD_SHAPE,
+    )
+    if lane == LANE_MEAL:
+        (
+            _anchor,
+            _complement,
+            name_a,
+            name_b,
+            cat_a,
+            cat_b,
+            fam_a,
+            fam_b,
+            _pair_row,
+        ) = _candidate_pair_fields(candidate, context)
+        text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+        text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+        meal_dominant_candidate = bool(
+            _is_meal_dominant_motif_signature(motif_family_signature) or _is_meal_dominant_pair_text(text_a, text_b)
+        )
+        if meal_dominant_candidate:
+            dominant_exposure = max(0, max(motif_family_exposure, family_pattern_exposure, bundle_shape_exposure))
+            if dominant_exposure > 0:
+                score -= _progressive_exposure_penalty(
+                    dominant_exposure,
+                    EXPOSURE_MEAL_DOMINANT_MOTIF_PENALTY,
+                    threshold=EXPOSURE_SURGE_THRESHOLD_MOTIF,
+                )
+                if dominant_exposure >= 2:
+                    score -= 0.30 * float(dominant_exposure - 1)
+            over_saturation = max(0, dominant_exposure - int(EXPOSURE_MEAL_FAMILY_SATURATION_THRESHOLD) + 1)
+            if over_saturation > 0:
+                score -= float(EXPOSURE_MEAL_FAMILY_SATURATION_PENALTY) * float(over_saturation ** 1.25)
+                pattern_over = max(0, family_pattern_exposure - int(EXPOSURE_MEAL_FAMILY_SATURATION_THRESHOLD))
+                shape_over = max(0, bundle_shape_exposure - int(EXPOSURE_MEAL_FAMILY_SATURATION_THRESHOLD))
+                if pattern_over > 0:
+                    score -= float(EXPOSURE_MEAL_PATTERN_SATURATION_PENALTY) * float(pattern_over)
+                if shape_over > 0:
+                    score -= float(EXPOSURE_MEAL_SHAPE_SATURATION_PENALTY) * float(shape_over)
+                if source_group != "top_bundle":
+                    score -= float(EXPOSURE_MEAL_DOMINANT_FALLBACK_EXTRA) * float(over_saturation)
+            hard_over = max(0, motif_family_exposure - int(MEAL_DOMINANT_HARD_DECAY_START))
+            if hard_over > 0:
+                score -= float(MEAL_DOMINANT_HARD_DECAY_STEP) * float(hard_over)
+            motif_sig = str(motif_family_signature).strip().lower()
+            if motif_sig.endswith(":rice_chicken_meal") and motif_family_exposure > 1:
+                score -= float(MEAL_CHICKEN_DEFAULT_EXTRA_DECAY) * float(motif_family_exposure - 1)
+            if motif_sig.endswith(":rice_meat_meal") and motif_family_exposure > 2:
+                score -= float(MEAL_RICE_MEAT_EXTRA_DECAY) * float(motif_family_exposure - 2)
+    if lane == LANE_SNACK:
+        snack_over = max(0, motif_family_exposure - int(EXPOSURE_SNACK_FAMILY_SATURATION_THRESHOLD) + 1)
+        if snack_over > 0:
+            score -= float(EXPOSURE_SNACK_FAMILY_SATURATION_PENALTY) * float(snack_over ** 1.1)
+            if motif_family_signature in SHOPPER_FAMILY_SNACK_DOMINANT:
+                score -= float(EXPOSURE_SNACK_DOMINANT_FAMILY_EXTRA) * float(snack_over)
+    motif_exposure = global_fallback_motif_exposure or {}
+    fallback_motif_key = _controlled_fallback_motif_key(candidate, context)
+    if source_group == "fallback_food" and fallback_motif_key:
+        score -= EXPOSURE_FALLBACK_MOTIF_PENALTY * float(motif_exposure.get(fallback_motif_key, 0))
     source_bonus = {
         "top_bundle": 0.18,
         "copurchase_fallback": 0.10,
@@ -4707,10 +5847,31 @@ def _candidate_effective_score(
         "other": 0.0,
     }
     score += float(source_bonus.get(source_group, 0.0))
+    strength = str(candidate.get("pair_strength", "")).strip()
+    if strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE}:
+        rarity_room = max(
+            0.0,
+            2.0 - float(motif_family_exposure) - 0.55 * float(bundle_shape_exposure),
+        )
+        score += min(
+            RARER_STRONG_ALTERNATIVE_BONUS_CAP,
+            RARER_STRONG_ALTERNATIVE_BONUS_STEP * rarity_room,
+        )
+        family_rarity_room = max(
+            0.0,
+            3.0 - float(motif_family_exposure) - 0.55 * float(family_pattern_exposure) - 0.45 * float(bundle_shape_exposure),
+        )
+        score += min(
+            RARER_STRONG_FAMILY_BONUS_CAP,
+            RARER_STRONG_FAMILY_BONUS_STEP * family_rarity_room,
+        )
+        if lane == LANE_MEAL and meal_dominant_candidate and motif_family_exposure >= int(EXPOSURE_MEAL_FAMILY_SATURATION_THRESHOLD):
+            score -= 0.18 * float(motif_family_exposure - int(EXPOSURE_MEAL_FAMILY_SATURATION_THRESHOLD) + 1)
     if theme.endswith("_generic"):
         score -= GENERIC_THEME_PENALTY
-    if str(candidate.get("pair_strength", "")) == semantics.STRENGTH_WEAK:
+    if strength == semantics.STRENGTH_WEAK:
         score -= max(WEAK_CANDIDATE_PENALTY, 0.45)
+    score += _human_preference_score_adjustment(candidate, context)
     return float(score)
 
 
@@ -4769,6 +5930,10 @@ def _choose_candidate_first_food_trio(
     context: PersonalizationContext,
     global_pair_exposure: dict[tuple[int, int], int],
     global_template_exposure: dict[str, int],
+    global_fallback_motif_exposure: dict[str, int] | None = None,
+    global_motif_family_exposure: dict[str, int] | None = None,
+    global_family_pattern_exposure: dict[str, int] | None = None,
+    global_bundle_shape_exposure: dict[str, int] | None = None,
 ) -> list[dict[str, object]]:
     def _lane_candidates(filter_fn) -> dict[str, list[dict[str, object]]]:
         lane_out: dict[str, list[dict[str, object]]] = {lane: [] for lane in FOOD_LANE_ORDER}
@@ -4784,6 +5949,10 @@ def _choose_candidate_first_food_trio(
                 context,
                 global_pair_exposure=global_pair_exposure,
                 global_template_exposure=global_template_exposure,
+                global_fallback_motif_exposure=global_fallback_motif_exposure,
+                global_motif_family_exposure=global_motif_family_exposure,
+                global_family_pattern_exposure=global_family_pattern_exposure,
+                global_bundle_shape_exposure=global_bundle_shape_exposure,
             )
             lane_out[lane].append(enriched)
         for lane in FOOD_LANE_ORDER:
@@ -4850,6 +6019,10 @@ def _choose_candidate_first_food_trio(
                 context,
                 global_pair_exposure=global_pair_exposure,
                 global_template_exposure=global_template_exposure,
+                global_fallback_motif_exposure=global_fallback_motif_exposure,
+                global_motif_family_exposure=global_motif_family_exposure,
+                global_family_pattern_exposure=global_family_pattern_exposure,
+                global_bundle_shape_exposure=global_bundle_shape_exposure,
             )
             lane_candidates.append(enriched)
         lane_candidates.sort(
@@ -4874,6 +6047,122 @@ def _choose_candidate_first_food_trio(
         used_anchors.add(int(_safe_int(picked.get("anchor"), default=-1)))
         used_pairs.add(_candidate_pair_key(picked))
     return selected
+
+
+def _normalise_float_lookup(values: dict[str, float]) -> dict[str, float]:
+    if not values:
+        return {}
+    lo = min(float(v) for v in values.values())
+    hi = max(float(v) for v in values.values())
+    span = hi - lo
+    if span <= 1e-9:
+        return {str(k): 1.0 for k in values}
+    out: dict[str, float] = {}
+    for key, value in values.items():
+        out[str(key)] = float((float(value) - lo) / span)
+    return out
+
+
+def _profile_product_interest(profile: PersonProfile) -> dict[int, float]:
+    counts = {int(pid): float(count) for pid, count in profile.history_counts.items() if int(pid) > 0 and float(count) > 0.0}
+    if not counts:
+        counts = {int(pid): 1.0 for pid in profile.history_product_ids if int(pid) > 0}
+    return {int(pid): float(score) for pid, score in _normalised_values(counts).items()}
+
+
+def _profile_family_interest(profile: PersonProfile, context: PersonalizationContext) -> dict[str, float]:
+    counts: dict[str, float] = {}
+    for pid in profile.history_product_ids:
+        pid_int = int(pid)
+        if pid_int <= 0:
+            continue
+        family = _normalise_text(context.product_family_by_id.get(pid_int, ""))
+        if not family:
+            continue
+        weight = float(profile.history_counts.get(pid_int, 1))
+        counts[family] = float(counts.get(family, 0.0)) + max(1.0, weight)
+    return _normalise_float_lookup(counts)
+
+
+def _profile_category_affinity(profile: PersonProfile, context: PersonalizationContext) -> dict[str, float]:
+    counts: dict[str, float] = {}
+    for pid in profile.history_product_ids:
+        pid_int = int(pid)
+        if pid_int <= 0:
+            continue
+        category = _normalise_text(context.category_by_id.get(pid_int, ""))
+        if not category:
+            continue
+        weight = float(profile.history_counts.get(pid_int, 1))
+        counts[category] = float(counts.get(category, 0.0)) + max(1.0, weight)
+    return _normalise_float_lookup(counts)
+
+
+def _profile_shopper_family_interest(profile: PersonProfile, context: PersonalizationContext) -> dict[str, float]:
+    history_ids = [int(pid) for pid in profile.history_product_ids if int(pid) > 0]
+    if not history_ids:
+        return {}
+    weighted_texts: list[tuple[str, float]] = []
+    for pid in history_ids:
+        name = _product_name(pid, context)
+        category = _product_category(pid, context)
+        family = _product_family(pid, context)
+        text = semantics.normalize_product_text(name, category, family)
+        if not text:
+            continue
+        weight = float(max(1.0, profile.history_counts.get(pid, 1)))
+        weighted_texts.append((text, weight))
+    if not weighted_texts:
+        return {}
+
+    def _presence(hints: frozenset[str]) -> float:
+        score = 0.0
+        for text, weight in weighted_texts:
+            if _text_has_any_hint(text, hints):
+                score += float(weight)
+        return float(score)
+
+    chicken = _presence(HUMAN_HINTS_CHICKEN)
+    minced_meat = _presence(HUMAN_HINTS_MINCED_MEAT)
+    nuggets = _presence(HUMAN_HINTS_NUGGETS)
+    eggs = _presence(HUMAN_HINTS_EGGS)
+    rice = _presence(HUMAN_HINTS_RICE)
+    meat = _presence(HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH)
+    bread = _presence(HUMAN_HINTS_BREAD)
+    tortilla = _presence(HUMAN_HINTS_TORTILLA)
+    labneh = _presence(HUMAN_HINTS_LABNEH)
+    chips = _presence(HUMAN_HINTS_CHIPS | MOTIF_HINTS_CRUNCHY_SNACK)
+    biscuits = _presence(HUMAN_HINTS_BISCUITS)
+    chocolate = _presence(HUMAN_HINTS_CHOCOLATE)
+    milk = _presence(HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK | HUMAN_HINTS_CONDENSED_MILK)
+    tea = _presence(HUMAN_HINTS_TEA)
+    coffee = _presence(HUMAN_HINTS_COFFEE)
+    dates = _presence(HUMAN_HINTS_DATES)
+
+    family_interest_raw: dict[str, float] = {
+        "meal:chicken_wrap_meal": min(chicken, tortilla + 0.6 * bread),
+        "meal:minced_meat_wrap_meal": min(minced_meat, tortilla + 0.7 * bread),
+        "meal:nuggets_bread_fastmeal": min(nuggets, bread),
+        "meal:egg_breakfast_meal": min(eggs, bread),
+        "meal:labneh_bread_meal": min(labneh, bread),
+        "meal:rice_chicken_meal": min(rice, chicken),
+        "meal:rice_meat_meal": min(rice, meat),
+        "meal:rice_egg_meal": min(rice, eggs),
+        "snack:biscuit_milk_tea_snack": min(biscuits, max(milk, tea, coffee)),
+        "snack:wafer_chocolate_snack": min(biscuits, chocolate),
+        "snack:labneh_crunchy_snack": min(labneh, chips),
+        "snack:nutella_snack_pair": min(_presence(HUMAN_HINTS_NUTELLA), max(bread, biscuits)),
+        "occasion:tea_milk_drink": min(tea, milk),
+        "occasion:coffee_milk_drink": min(coffee, milk),
+        "occasion:dates_milk_treat": min(dates, milk),
+        "occasion:dates_cream_treat": min(dates, _presence(HUMAN_HINTS_CREAM_TOKEN)),
+        "occasion:dates_dairy_treat": min(dates, milk),
+    }
+    normalised = _normalise_float_lookup({k: v for k, v in family_interest_raw.items() if v > 0.0})
+    for key in ("meal:rice_meat_meal", "meal:rice_chicken_meal", "meal:protein_grain_meal", "meal:protein_starch_generic_meal"):
+        if key in normalised:
+            normalised[key] = float(normalised[key] * 0.72)
+    return normalised
 
 
 def _profile_recency_order(profile: PersonProfile) -> dict[int, float]:
@@ -4946,6 +6235,10 @@ def _candidate_personalization_boost(
     lane_intent_map: dict[str, float],
     recent_category_interest: dict[str, float],
     recent_brand_affinity: dict[str, float],
+    profile_product_interest: dict[int, float],
+    profile_family_interest: dict[str, float],
+    profile_category_affinity: dict[str, float],
+    profile_shopper_family_interest: dict[str, float],
 ) -> float:
     anchor = int(_safe_int(candidate.get("anchor"), default=-1))
     complement = int(_safe_int(candidate.get("complement"), default=-1))
@@ -4964,9 +6257,96 @@ def _candidate_personalization_boost(
     cat_a = _normalise_text(context.category_by_id.get(anchor, ""))
     cat_b = _normalise_text(context.category_by_id.get(complement, ""))
     category_component = 0.02 * max(float(recent_category_interest.get(cat_a, 0.0)), float(recent_category_interest.get(cat_b, 0.0)))
+    category_affinity_component = PERSONAL_CATEGORY_AFFINITY_WEIGHT * max(
+        float(profile_category_affinity.get(cat_a, 0.0)),
+        float(profile_category_affinity.get(cat_b, 0.0)),
+    )
     brand_a = _normalise_text(context.product_brand_by_id.get(anchor, ""))
     brand_b = _normalise_text(context.product_brand_by_id.get(complement, ""))
     recent_brand_component = 0.015 * max(float(recent_brand_affinity.get(brand_a, 0.0)), float(recent_brand_affinity.get(brand_b, 0.0)))
+    fam_a = _normalise_text(context.product_family_by_id.get(anchor, ""))
+    fam_b = _normalise_text(context.product_family_by_id.get(complement, ""))
+    family_component = PERSONAL_FAMILY_AFFINITY_WEIGHT * max(
+        float(profile_family_interest.get(fam_a, 0.0)),
+        float(profile_family_interest.get(fam_b, 0.0)),
+    )
+    anchor_history_component = PERSONAL_ANCHOR_HISTORY_BOOST if float(profile_product_interest.get(anchor, 0.0)) > 0.0 else 0.0
+    complement_history_component = (
+        PERSONAL_COMPLEMENT_HISTORY_BOOST if float(profile_product_interest.get(complement, 0.0)) > 0.0 else 0.0
+    )
+    product_repeat_component = PERSONAL_PRODUCT_REPEAT_WEIGHT * max(
+        float(profile_product_interest.get(anchor, 0.0)),
+        float(profile_product_interest.get(complement, 0.0)),
+    )
+    strong_anchor_match_component = 0.0
+    if float(profile_product_interest.get(anchor, 0.0)) >= 0.66:
+        strong_anchor_match_component = PERSONAL_STRONG_ANCHOR_MATCH_BONUS
+    lane_score = float(lane_intent_map.get(lane, 0.0))
+    lane_intents_food = {
+        LANE_MEAL: float(lane_intent_map.get(LANE_MEAL, 0.0)),
+        LANE_SNACK: float(lane_intent_map.get(LANE_SNACK, 0.0)),
+        LANE_OCCASION: float(lane_intent_map.get(LANE_OCCASION, 0.0)),
+    }
+    best_lane = max(lane_intents_food, key=lane_intents_food.get)
+    best_lane_score = float(lane_intents_food.get(best_lane, 0.0))
+    anchor_name = str(context.product_name_by_id.get(anchor, ""))
+    complement_name = str(context.product_name_by_id.get(complement, ""))
+    anchor_text = _normalise_text(anchor_name)
+    complement_text = _normalise_text(complement_name)
+    motif_family_signature = _candidate_motif_family_signature(candidate, context)
+    meal_dominant_family = bool(lane == LANE_MEAL and _is_meal_dominant_motif_signature(motif_family_signature))
+    utilitarian_family = _is_utilitarian_shopper_family_signature(motif_family_signature)
+    dominant_family = _is_dominant_shopper_family_signature(motif_family_signature)
+    wrap_style_pair = _pair_matches_hints(
+        anchor_text,
+        complement_text,
+        HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MINCED_MEAT | HUMAN_HINTS_EGGS,
+        HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA,
+    )
+    snack_or_occasion_pattern = bool(
+        str(candidate.get("snack_pattern", "")).strip()
+        or _pair_matches_hints(anchor_text, complement_text, HUMAN_HINTS_BISCUITS, HUMAN_HINTS_MILK | HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE)
+        or _pair_matches_hints(anchor_text, complement_text, HUMAN_HINTS_DATES, HUMAN_HINTS_EVAP_MILK | HUMAN_HINTS_CONDENSED_MILK)
+    )
+    max_family_interest = max(
+        float(profile_family_interest.get(fam_a, 0.0)),
+        float(profile_family_interest.get(fam_b, 0.0)),
+    )
+    lane_alignment_component = 0.0
+    if lane in FOOD_LANE_ORDER and lane_score >= 0.40:
+        lane_alignment_component += 0.05
+    if lane in {LANE_SNACK, LANE_OCCASION} and lane == best_lane and lane_score >= 0.35:
+        lane_alignment_component += 0.06
+    if lane in FOOD_LANE_ORDER and lane != best_lane and (best_lane_score - lane_score) >= 0.22:
+        lane_alignment_component -= 0.08
+    if lane == LANE_MEAL and best_lane in {LANE_SNACK, LANE_OCCASION} and best_lane_score >= 0.45:
+        lane_alignment_component -= 0.10
+    if meal_dominant_family and best_lane in {LANE_SNACK, LANE_OCCASION} and best_lane_score >= 0.40:
+        lane_alignment_component -= PERSONAL_ESCAPE_GENERIC_MEAL_PENALTY
+    if meal_dominant_family and lane_score < 0.45 and max_family_interest < 0.45:
+        lane_alignment_component -= PERSONAL_ESCAPE_GENERIC_MEAL_AFFINITY_PENALTY
+    theme = str(candidate.get("theme", "")).strip().lower()
+    if lane == LANE_MEAL and theme.endswith("_generic") and best_lane in {LANE_SNACK, LANE_OCCASION}:
+        lane_alignment_component -= 0.06
+    if lane == LANE_SNACK and str(candidate.get("snack_pattern", "")).strip():
+        lane_alignment_component += 0.06
+    if lane in {LANE_SNACK, LANE_OCCASION} and lane == best_lane and lane_score >= 0.42:
+        lane_alignment_component += PERSONAL_NONMEAL_HISTORY_ESCAPE_BONUS
+    if lane in {LANE_SNACK, LANE_OCCASION} and snack_or_occasion_pattern and best_lane in {LANE_SNACK, LANE_OCCASION}:
+        lane_alignment_component += PERSONAL_SNACK_OCCASION_PATTERN_BONUS
+    if lane == LANE_MEAL and wrap_style_pair and max_family_interest >= 0.35:
+        lane_alignment_component += PERSONAL_WRAP_STYLE_HISTORY_BONUS
+    shopper_family_alignment_component = PERSONAL_SHOPPER_FAMILY_ALIGNMENT_WEIGHT * float(
+        profile_shopper_family_interest.get(motif_family_signature, 0.0)
+    )
+    if utilitarian_family and float(profile_shopper_family_interest.get(motif_family_signature, 0.0)) < 0.35:
+        shopper_family_alignment_component -= 0.14
+    if lane == LANE_MEAL and dominant_family and best_lane in {LANE_SNACK, LANE_OCCASION} and best_lane_score >= 0.38:
+        shopper_family_alignment_component -= PERSONAL_SHOPPER_FAMILY_ESCAPE_PENALTY
+    if lane in {LANE_SNACK, LANE_OCCASION} and best_lane in {LANE_SNACK, LANE_OCCASION} and lane == best_lane:
+        shopper_family_alignment_component += 0.05 * float(
+            profile_shopper_family_interest.get(motif_family_signature, 0.0)
+        )
     brand_component = 0.0
     if float(candidate.get("brand_signal", 0.0)) > 0:
         brand_component += 0.02
@@ -4977,6 +6357,14 @@ def _candidate_personalization_boost(
         + count_component
         + lane_component
         + category_component
+        + category_affinity_component
+        + family_component
+        + anchor_history_component
+        + complement_history_component
+        + product_repeat_component
+        + strong_anchor_match_component
+        + lane_alignment_component
+        + shopper_family_alignment_component
         + recent_brand_component
         + brand_component
     )
@@ -5188,12 +6576,17 @@ def build_recommendations_for_profiles(
 
     global_pair_exposure: dict[tuple[int, int], int] = {}
     global_template_exposure: dict[str, int] = {}
+    global_fallback_motif_exposure: dict[str, int] = {}
+    global_motif_family_exposure: dict[str, int] = {}
+    global_family_pattern_exposure: dict[str, int] = {}
+    global_bundle_shape_exposure: dict[str, int] = {}
 
     while idx < len(profile_queue) and len(recommendations) < max_people:
         profile = profile_queue[idx]
         idx += 1
-        profile_rng = _rng_for_profile(run_id, profile.profile_id, rng_salt=rng_salt)
-        nonfood_gate_rng = _rng_for_profile(run_id, profile.profile_id, rng_salt=f"{rng_salt or ''}::nonfood_gate")
+        profile_seed_key = _profile_seed_key(profile)
+        profile_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=rng_salt)
+        nonfood_gate_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=f"{rng_salt or ''}::nonfood_gate")
         include_nonfood = bool(nonfood_gate_rng.random() < NONFOOD_INCLUDE_RATE)
         lane_ranked = _rank_anchors_by_lane(profile, context, profile_rng, active_base_dir)
         seed_anchors = _pick_three_lane_anchors(lane_ranked, profile_rng) or {}
@@ -5278,7 +6671,7 @@ def build_recommendations_for_profiles(
             if lane_name in FOOD_LANE_ORDER and fam_a and fam_b and fam_a == fam_b:
                 _record_serving_telemetry(serving_telemetry, lane_name, "rejected_family_reuse")
                 return None, local_dup_counter
-            display_pair_key = _oriented_pair_key(a_id, b_id)
+            display_pair_key = _pair_key(a_id, b_id)
             if display_pair_key in used_bundle_keys_for_person:
                 return None, int(local_dup_counter) + 1
 
@@ -5412,6 +6805,10 @@ def build_recommendations_for_profiles(
         lane_intent_map = _profile_lane_intent_map(profile, context)
         recent_category_interest = _profile_recent_category_interest(profile, context)
         recent_brand_affinity = _profile_recent_brand_affinity(profile, context)
+        profile_product_interest = _profile_product_interest(profile)
+        profile_family_interest = _profile_family_interest(profile, context)
+        profile_category_affinity = _profile_category_affinity(profile, context)
+        profile_shopper_family_interest = _profile_shopper_family_interest(profile, context)
         candidate_pool: dict[tuple[str, int, int, str], dict[str, object]] = {}
         local_duplicate_blocked = 0
 
@@ -5419,6 +6816,18 @@ def build_recommendations_for_profiles(
             anchor_id = int(_safe_int(choice.get("anchor"), default=-1))
             complement_id = int(_safe_int(choice.get("complement"), default=-1))
             if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
+                return
+            row = choice.get("bundle_row")
+            pair_row = row if isinstance(row, pd.Series) else None
+            final_quality_reject = _final_human_quality_reject_reason(
+                anchor_id,
+                complement_id,
+                str(lane_name),
+                context,
+                pair_row=pair_row,
+            )
+            if final_quality_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_final_human_quality")
                 return
             source = str(choice.get("source", "copurchase_fallback"))
             key = (str(lane_name), int(anchor_id), int(complement_id), source)
@@ -5434,9 +6843,21 @@ def build_recommendations_for_profiles(
                     lane_intent_map=lane_intent_map,
                     recent_category_interest=recent_category_interest,
                     recent_brand_affinity=recent_brand_affinity,
+                    profile_product_interest=profile_product_interest,
+                    profile_family_interest=profile_family_interest,
+                    profile_category_affinity=profile_category_affinity,
+                    profile_shopper_family_interest=profile_shopper_family_interest,
                 )
             )
             candidate["pool_score"] = float(candidate["base_score"]) + float(candidate["personalization_boost"])
+            candidate["motif_family_signature"] = _candidate_motif_family_signature(candidate, context)
+            candidate["family_pattern_signature"] = _candidate_family_pattern_signature(candidate, context)
+            candidate["bundle_shape_signature"] = _candidate_bundle_shape_signature(candidate, context)
+            fallback_quality_reject = _fallback_quality_reject_reason(candidate, context)
+            if fallback_quality_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_quality")
+                return
+            candidate["fallback_motif_key"] = _controlled_fallback_motif_key(candidate, context)
             existing = candidate_pool.get(key)
             if existing is None or float(candidate["pool_score"]) > float(existing.get("pool_score", -1e9)):
                 candidate_pool[key] = candidate
@@ -5514,17 +6935,89 @@ def build_recommendations_for_profiles(
         selected_anchors: set[int] = set()
         selected_pairs: set[tuple[int, int]] = set()
         cleaning_count = 0
+        selected_fallback_motif_counts: dict[str, int] = {}
 
         enriched_candidates: list[dict[str, object]] = []
         for candidate in ordered_candidates:
             enriched = dict(candidate)
-            enriched["effective_score"] = _candidate_effective_score(
+            effective_score = _candidate_effective_score(
                 enriched,
                 context,
                 global_pair_exposure=global_pair_exposure,
                 global_template_exposure=global_template_exposure,
+                global_fallback_motif_exposure=global_fallback_motif_exposure,
+                global_motif_family_exposure=global_motif_family_exposure,
+                global_family_pattern_exposure=global_family_pattern_exposure,
+                global_bundle_shape_exposure=global_bundle_shape_exposure,
             )
+            motif_signature = str(enriched.get("motif_family_signature", "")).strip().lower()
+            family_exposure_count = int(global_motif_family_exposure.get(motif_signature, 0)) if motif_signature else 0
+            family_rank_penalty = min(
+                FAMILY_OVERUSE_RANK_PENALTY_CAP,
+                FAMILY_OVERUSE_RANK_PENALTY_STEP * float(max(0, family_exposure_count - 1)),
+            )
+            enriched["effective_score"] = float(effective_score)
+            enriched["family_exposure_count"] = int(family_exposure_count)
+            # Explicit close-score preference: when candidates are similarly strong, prefer rarer motif families.
+            enriched["effective_score_rank"] = float(effective_score) - float(family_rank_penalty)
             enriched_candidates.append(enriched)
+
+        strong_food_candidates = [
+            cand
+            for cand in enriched_candidates
+            if str(cand.get("lane", "")).strip().lower() in FOOD_LANE_ORDER
+            and not _is_household_bundle(cand, context)
+            and _candidate_is_strong_finalist(cand)
+        ]
+        best_strong_score = max((float(cand.get("effective_score", 0.0)) for cand in strong_food_candidates), default=float("-inf"))
+        best_rare_strong_score = max(
+            (
+                float(cand.get("effective_score", 0.0))
+                for cand in strong_food_candidates
+                if int(_safe_int(cand.get("family_exposure_count"), default=0)) < FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD
+            ),
+            default=float("-inf"),
+        )
+        for cand in strong_food_candidates:
+            lane_name = str(cand.get("lane", "")).strip().lower()
+            motif_signature = str(cand.get("motif_family_signature", "")).strip().lower()
+            family_exposure_count = int(_safe_int(cand.get("family_exposure_count"), default=0))
+            effective_score = float(cand.get("effective_score", 0.0))
+            rank_score = float(cand.get("effective_score_rank", effective_score))
+            if family_exposure_count >= 2 and _is_dominant_shopper_family_signature(motif_signature):
+                rank_score -= 0.34 * float((family_exposure_count - 1) ** 1.1)
+                if lane_name == LANE_MEAL:
+                    rank_score -= 0.20 * float(family_exposure_count - 1)
+            if family_exposure_count >= 1 and _is_utilitarian_shopper_family_signature(motif_signature):
+                rank_score -= 0.28 * float(family_exposure_count)
+
+            close_to_rare = (
+                best_rare_strong_score > float("-inf")
+                and best_rare_strong_score + FAMILY_RARITY_CLOSE_SCORE_MARGIN >= effective_score
+            )
+            if family_exposure_count >= FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD and close_to_rare:
+                overuse_steps = family_exposure_count - FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD + 1
+                rank_score -= 0.30 * float(overuse_steps)
+                if _is_dominant_shopper_family_signature(motif_signature):
+                    rank_score -= 0.20 * float(overuse_steps)
+                if lane_name == LANE_MEAL and _is_meal_dominant_motif_signature(motif_signature):
+                    rank_score -= MEAL_DOMINANT_CLOSE_SCORE_EXTRA_PENALTY * float(overuse_steps)
+                if _is_utilitarian_shopper_family_signature(motif_signature):
+                    rank_score -= 0.22 * float(overuse_steps)
+
+            if family_exposure_count < FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD and best_strong_score > float("-inf"):
+                close_gap = float(best_strong_score - effective_score)
+                if 0.0 <= close_gap <= FAMILY_RARITY_CLOSE_SCORE_MARGIN:
+                    rarity_boost = FAMILY_RARITY_CLOSE_SCORE_BONUS * (
+                        1.0 - (close_gap / max(FAMILY_RARITY_CLOSE_SCORE_MARGIN, 1e-9))
+                    )
+                    if _is_dominant_shopper_family_signature(motif_signature):
+                        rarity_boost *= 0.65
+                    if lane_name == LANE_MEAL and _is_utilitarian_shopper_family_signature(motif_signature):
+                        rarity_boost *= 0.55
+                    rank_score += float(max(0.0, rarity_boost))
+
+            cand["effective_score_rank"] = float(rank_score)
 
         food_candidates = [
             cand
@@ -5535,6 +7028,8 @@ def build_recommendations_for_profiles(
         ]
         food_candidates.sort(
             key=lambda cand: (
+                -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                int(_safe_int(cand.get("family_exposure_count"), default=0)),
                 -float(cand.get("effective_score", 0.0)),
                 _source_priority_rank(str(cand.get("source", ""))),
                 int(_safe_int(cand.get("pair_count"), default=0)) * -1,
@@ -5549,6 +7044,19 @@ def build_recommendations_for_profiles(
             complement_id = int(_safe_int(candidate.get("complement"), default=-1))
             if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
                 return False
+            lane_name = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+            row = candidate.get("bundle_row")
+            pair_row = row if isinstance(row, pd.Series) else None
+            final_quality_reject = _final_human_quality_reject_reason(
+                anchor_id,
+                complement_id,
+                lane_name,
+                context,
+                pair_row=pair_row,
+            )
+            if final_quality_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_final_human_quality")
+                return False
             pair_key = _pair_key(anchor_id, complement_id)
             if anchor_id in selected_anchors or pair_key in selected_pairs:
                 return False
@@ -5557,12 +7065,54 @@ def build_recommendations_for_profiles(
                 return False
             if is_cleaning and cleaning_count >= MAX_CLEANING_BUNDLES_PER_PERSON:
                 return False
+            source_group = _source_group_from_source(str(candidate.get("source", "")))
+            fallback_motif = str(candidate.get("fallback_motif_key", "")).strip()
+            if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
+                current_motif_count = int(selected_fallback_motif_counts.get(fallback_motif, 0))
+                if current_motif_count >= FALLBACK_MOTIF_REPEAT_CAP_PER_PERSON:
+                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_motif_repeat")
+                    return False
+                if fallback_motif in EVAP_REPETITIVE_FALLBACK_MOTIFS:
+                    evap_count = sum(
+                        int(selected_fallback_motif_counts.get(motif_key, 0))
+                        for motif_key in EVAP_REPETITIVE_FALLBACK_MOTIFS
+                    )
+                    if evap_count >= FALLBACK_EVAP_MOTIF_CAP_PER_PERSON:
+                        _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_evap_motif_cap")
+                        return False
             selected_choices.append(candidate)
             selected_anchors.add(anchor_id)
             selected_pairs.add(pair_key)
             if is_cleaning:
                 cleaning_count += 1
+            if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
+                selected_fallback_motif_counts[fallback_motif] = int(selected_fallback_motif_counts.get(fallback_motif, 0)) + 1
             return True
+
+        # Mild lane-balance nudge: if a strong non-meal option is close in score, take one early.
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            top_meal_score = max(
+                (
+                    float(cand.get("effective_score", 0.0))
+                    for cand in food_candidates
+                    if str(cand.get("lane", "")).strip().lower() == LANE_MEAL
+                ),
+                default=float("-inf"),
+            )
+            non_meal_candidates = [
+                cand
+                for cand in food_candidates
+                if str(cand.get("lane", "")).strip().lower() in {LANE_SNACK, LANE_OCCASION}
+            ]
+            for candidate in non_meal_candidates:
+                candidate_lane = str(candidate.get("lane", "")).strip().lower()
+                if float(lane_intent_map.get(candidate_lane, 0.0)) < 0.20:
+                    continue
+                candidate_score = float(candidate.get("effective_score", 0.0))
+                if top_meal_score > float("-inf") and candidate_score + NON_MEAL_COVERAGE_MARGIN < top_meal_score:
+                    continue
+                if _try_select(candidate, allow_cleaning=False):
+                    break
 
         for candidate in food_candidates:
             if _try_select(candidate, allow_cleaning=False) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
@@ -5615,6 +7165,10 @@ def build_recommendations_for_profiles(
                     context,
                     global_pair_exposure=global_pair_exposure,
                     global_template_exposure=global_template_exposure,
+                    global_fallback_motif_exposure=global_fallback_motif_exposure,
+                    global_motif_family_exposure=global_motif_family_exposure,
+                    global_family_pattern_exposure=global_family_pattern_exposure,
+                    global_bundle_shape_exposure=global_bundle_shape_exposure,
                 )
                 cleaning_candidates.append(enriched)
             cleaning_candidates.sort(
@@ -5646,6 +7200,24 @@ def build_recommendations_for_profiles(
             global_pair_exposure[pair_exposure_key] = int(global_pair_exposure.get(pair_exposure_key, 0)) + 1
             template_signature = _template_signature(chosen, context)
             global_template_exposure[template_signature] = int(global_template_exposure.get(template_signature, 0)) + 1
+            motif_key = _controlled_fallback_motif_key(chosen, context)
+            if motif_key in CONTROLLED_FALLBACK_MOTIFS:
+                global_fallback_motif_exposure[motif_key] = int(global_fallback_motif_exposure.get(motif_key, 0)) + 1
+            motif_family_signature = _candidate_motif_family_signature(chosen, context)
+            if motif_family_signature:
+                global_motif_family_exposure[motif_family_signature] = int(
+                    global_motif_family_exposure.get(motif_family_signature, 0)
+                ) + 1
+            family_pattern_signature = _candidate_family_pattern_signature(chosen, context)
+            if family_pattern_signature:
+                global_family_pattern_exposure[family_pattern_signature] = int(
+                    global_family_pattern_exposure.get(family_pattern_signature, 0)
+                ) + 1
+            bundle_shape_signature = _candidate_bundle_shape_signature(chosen, context)
+            if bundle_shape_signature:
+                global_bundle_shape_exposure[bundle_shape_signature] = int(
+                    global_bundle_shape_exposure.get(bundle_shape_signature, 0)
+                ) + 1
             bundles_for_person.append(bundle_rec)
             if len(bundles_for_person) >= MAX_BUNDLES_PER_PERSON:
                 break
@@ -5659,7 +7231,7 @@ def build_recommendations_for_profiles(
                 resample_budget -= 1
                 resample_rng = _rng_for_profile(
                     run_id,
-                    profile.profile_id,
+                    profile_seed_key,
                     rng_salt=f"{rng_salt or ''}::resample::{resample_budget}",
                 )
                 candidate_profile = build_random_profile(order_pool, rng=resample_rng)

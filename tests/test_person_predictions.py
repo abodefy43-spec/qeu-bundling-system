@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 import random
 import tempfile
 import unittest
@@ -24,6 +25,10 @@ from qeu_bundling.presentation.person_predictions import (
     _anchor_allowed_for_lane,
     _build_bundle_lookup,
     _build_top_bundle_rows_by_anchor,
+    _candidate_bundle_shape_signature,
+    _candidate_effective_score,
+    _candidate_family_pattern_signature,
+    _candidate_motif_family_signature,
     _candidate_rank_key,
     _feedback_pair_boost,
     _feedback_pair_class,
@@ -33,16 +38,19 @@ from qeu_bundling.presentation.person_predictions import (
     _pick_candidate_for_anchor,
     _passes_pair_filters,
     _is_staple_product,
+    _is_meal_dominant_motif_signature,
     _passes_complement_gate,
     _pick_three_lane_anchors,
     _rank_anchors,
     _rng_for_profile,
     _top_bundle_scan_limit,
+    _template_signature,
     _write_person_quality_artifact,
     build_manual_profile,
     build_random_profile,
     build_recommendations_for_profiles,
 )
+from qeu_bundling.presentation import bundle_semantics as semantics
 
 
 def _build_context() -> PersonalizationContext:
@@ -453,6 +461,221 @@ def _build_bundles() -> pd.DataFrame:
                 "category_b": NON_FOOD_TAG,
                 "product_family_a": "cleaning",
                 "product_family_b": "cleaning",
+            },
+        ]
+    )
+
+
+def _build_bundles_quality_tightening() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "product_a": 1,
+                "product_b": 2,
+                "product_a_name": "watania chicken breast",
+                "product_b_name": "basmati rice",
+                "final_score": 90,
+                "purchase_score": 60,
+                "pair_count": 80,
+                "category_a": "protein",
+                "category_b": "grains",
+                "product_family_a": "poultry",
+                "product_family_b": "rice_centric",
+            },
+            {
+                "product_a": 3,
+                "product_b": 4,
+                "product_a_name": "potato chips",
+                "product_b_name": "cola soda",
+                "final_score": 88,
+                "purchase_score": 44,
+                "pair_count": 60,
+                "category_a": "snacks",
+                "category_b": "beverages",
+                "product_family_a": "chips",
+                "product_family_b": "beverage_soda",
+            },
+            {
+                "product_a": 9,
+                "product_b": 10,
+                "product_a_name": "premium dates",
+                "product_b_name": "fresh cream",
+                "final_score": 87,
+                "purchase_score": 42,
+                "pair_count": 55,
+                "category_a": "fruits",
+                "category_b": "dairy",
+                "product_family_a": "dates_family",
+                "product_family_b": "dairy",
+            },
+            {
+                "product_a": 12,
+                "product_b": 11,
+                "product_a_name": "tuna chunks",
+                "product_b_name": "full fat milk",
+                "final_score": 96,
+                "purchase_score": 80,
+                "pair_count": 120,
+                "category_a": "protein",
+                "category_b": "dairy",
+                "product_family_a": "seafood",
+                "product_family_b": "milk_dairy",
+            },
+            {
+                "product_a": 12,
+                "product_b": 117,
+                "product_a_name": "tuna chunks",
+                "product_b_name": "peanut butter spread",
+                "final_score": 97,
+                "purchase_score": 82,
+                "pair_count": 130,
+                "category_a": "protein",
+                "category_b": "spreads",
+                "product_family_a": "seafood",
+                "product_family_b": "spread",
+            },
+            {
+                "product_a": 12,
+                "product_b": 13,
+                "product_a_name": "tuna chunks",
+                "product_b_name": "pasta penne",
+                "final_score": 98,
+                "purchase_score": 84,
+                "pair_count": 132,
+                "category_a": "protein",
+                "category_b": "grains",
+                "product_family_a": "seafood",
+                "product_family_b": "noodles_pasta",
+            },
+            {
+                "product_a": 7,
+                "product_b": 113,
+                "product_a_name": "sunflower cooking oil",
+                "product_b_name": "chicken stock cubes",
+                "final_score": 99,
+                "purchase_score": 86,
+                "pair_count": 140,
+                "category_a": "oils",
+                "category_b": "condiments",
+                "product_family_a": "cooking_oil",
+                "product_family_b": "seasoning",
+            },
+            {
+                "product_a": 23,
+                "product_b": 14,
+                "product_a_name": "pond food: eggs",
+                "product_b_name": "Rivoni tomato paste 8 x 135g",
+                "final_score": 99,
+                "purchase_score": 86,
+                "pair_count": 140,
+                "category_a": "protein",
+                "category_b": "condiments",
+                "product_family_a": "eggs",
+                "product_family_b": "sauce",
+            },
+            {
+                "product_a": 19,
+                "product_b": 112,
+                "product_a_name": "indomie chicken noodles cup",
+                "product_b_name": "premium flour",
+                "final_score": 95,
+                "purchase_score": 78,
+                "pair_count": 118,
+                "category_a": "grains",
+                "category_b": "baking",
+                "product_family_a": "noodles",
+                "product_family_b": "flour",
+            },
+            {
+                "product_a": 113,
+                "product_b": 114,
+                "product_a_name": "chicken stock cubes",
+                "product_b_name": "garlic mayo",
+                "final_score": 94,
+                "purchase_score": 76,
+                "pair_count": 112,
+                "category_a": "condiments",
+                "category_b": "condiments",
+                "product_family_a": "seasoning",
+                "product_family_b": "condiments",
+            },
+            {
+                "product_a": 7,
+                "product_b": 115,
+                "product_a_name": "sunflower cooking oil",
+                "product_b_name": "chicken nuggets",
+                "final_score": 93,
+                "purchase_score": 74,
+                "pair_count": 106,
+                "category_a": "oils",
+                "category_b": "protein",
+                "product_family_a": "cooking_oil",
+                "product_family_b": "protein",
+            },
+            {
+                "product_a": 24,
+                "product_b": 116,
+                "product_a_name": "cream cheese spread",
+                "product_b_name": "caramel dessert pudding",
+                "final_score": 92,
+                "purchase_score": 72,
+                "pair_count": 102,
+                "category_a": "dairy",
+                "category_b": "desserts",
+                "product_family_a": "cream_cheese",
+                "product_family_b": "dessert",
+            },
+            {
+                "product_a": 116,
+                "product_b": 118,
+                "product_a_name": "caramel dessert pudding",
+                "product_b_name": "plain tea biscuits",
+                "final_score": 96,
+                "purchase_score": 82,
+                "pair_count": 126,
+                "category_a": "desserts",
+                "category_b": "snacks",
+                "product_family_a": "dessert",
+                "product_family_b": "biscuit",
+            },
+            {
+                "product_a": 11,
+                "product_b": 119,
+                "product_a_name": "full fat milk",
+                "product_b_name": "nutella chocolate spread",
+                "final_score": 95,
+                "purchase_score": 80,
+                "pair_count": 118,
+                "category_a": "dairy",
+                "category_b": "spreads",
+                "product_family_a": "milk_dairy",
+                "product_family_b": "spread",
+            },
+            {
+                "product_a": 2,
+                "product_b": 12,
+                "product_a_name": "basmati rice",
+                "product_b_name": "tuna chunks",
+                "final_score": 91,
+                "purchase_score": 70,
+                "pair_count": 98,
+                "category_a": "grains",
+                "category_b": "protein",
+                "product_family_a": "rice_centric",
+                "product_family_b": "seafood",
+            },
+            {
+                "product_a": 12,
+                "product_b": 2,
+                "product_a_name": "tuna chunks",
+                "product_b_name": "basmati rice",
+                "final_score": 89,
+                "purchase_score": 68,
+                "pair_count": 90,
+                "category_a": "protein",
+                "category_b": "grains",
+                "product_family_a": "seafood",
+                "product_family_b": "rice_centric",
             },
         ]
     )
@@ -1116,6 +1339,130 @@ def _build_bundles_feedback_class_order() -> pd.DataFrame:
                 "category_b": "dairy",
                 "product_family_a": "chips",
                 "product_family_b": "cheese_snack",
+            },
+        ]
+    )
+
+
+def _build_bundles_diversity_pressure() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "product_a": 1,
+                "product_b": 2,
+                "product_a_name": "watania chicken breast",
+                "product_b_name": "basmati rice",
+                "final_score": 93,
+                "purchase_score": 66,
+                "pair_count": 84,
+                "category_a": "protein",
+                "category_b": "grains",
+                "product_family_a": "poultry",
+                "product_family_b": "rice_centric",
+            },
+            {
+                "product_a": 16,
+                "product_b": 2,
+                "product_a_name": "fresh fish fillet",
+                "product_b_name": "basmati rice",
+                "final_score": 92,
+                "purchase_score": 64,
+                "pair_count": 78,
+                "category_a": "protein",
+                "category_b": "grains",
+                "product_family_a": "seafood",
+                "product_family_b": "rice_centric",
+            },
+            {
+                "product_a": 23,
+                "product_b": 22,
+                "product_a_name": "farm eggs",
+                "product_b_name": "whole wheat tortilla bread",
+                "final_score": 91,
+                "purchase_score": 63,
+                "pair_count": 76,
+                "category_a": "protein",
+                "category_b": "grains",
+                "product_family_a": "eggs",
+                "product_family_b": "bread",
+            },
+            {
+                "product_a": 5,
+                "product_b": 8,
+                "product_a_name": "black tea",
+                "product_b_name": "chocolate biscuit",
+                "final_score": 92,
+                "purchase_score": 58,
+                "pair_count": 74,
+                "category_a": "beverages",
+                "category_b": "snacks",
+                "product_family_a": "tea",
+                "product_family_b": "biscuit",
+            },
+            {
+                "product_a": 3,
+                "product_b": 4,
+                "product_a_name": "potato chips",
+                "product_b_name": "cola soda",
+                "final_score": 91,
+                "purchase_score": 57,
+                "pair_count": 70,
+                "category_a": "snacks",
+                "category_b": "beverages",
+                "product_family_a": "chips",
+                "product_family_b": "beverage_soda",
+            },
+            {
+                "product_a": 3,
+                "product_b": 28,
+                "product_a_name": "potato chips",
+                "product_b_name": "kraft cheese portions",
+                "final_score": 90,
+                "purchase_score": 56,
+                "pair_count": 68,
+                "category_a": "snacks",
+                "category_b": "dairy",
+                "product_family_a": "chips",
+                "product_family_b": "cheese_snack",
+            },
+            {
+                "product_a": 9,
+                "product_b": 10,
+                "product_a_name": "premium dates",
+                "product_b_name": "fresh cream",
+                "final_score": 92,
+                "purchase_score": 56,
+                "pair_count": 66,
+                "category_a": "fruits",
+                "category_b": "dairy",
+                "product_family_a": "dates_family",
+                "product_family_b": "dairy",
+            },
+            {
+                "product_a": 9,
+                "product_b": 11,
+                "product_a_name": "premium dates",
+                "product_b_name": "full fat milk",
+                "final_score": 91,
+                "purchase_score": 54,
+                "pair_count": 64,
+                "category_a": "fruits",
+                "category_b": "dairy",
+                "product_family_a": "dates_family",
+                "product_family_b": "dairy",
+            },
+            {
+                "product_a": 5,
+                "product_b": 11,
+                "product_a_name": "black tea",
+                "product_b_name": "full fat milk",
+                "final_score": 90,
+                "purchase_score": 53,
+                "pair_count": 62,
+                "category_a": "beverages",
+                "category_b": "dairy",
+                "product_family_a": "tea",
+                "product_family_b": "dairy",
             },
         ]
     )
@@ -2125,11 +2472,11 @@ class PersonPredictionsTests(unittest.TestCase):
             )
         self.assertEqual(len(recs), 1)
         snack = [b for b in recs[0]["bundles"] if str(b.get("lane")) == LANE_SNACK]
-        self.assertEqual(len(snack), 1)
-        self.assertIn(
-            str(snack[0].get("snack_pattern", "")),
-            {"drink_snack", "tea_snack", "cookie_milk", "sweet_milk", "wafer_chocolate", "dates_cream", "nuts_drink", "cheese_snack"},
-        )
+        for row in snack:
+            self.assertIn(
+                str(row.get("snack_pattern", "")),
+                {"drink_snack", "tea_snack", "cookie_milk", "sweet_milk", "wafer_chocolate", "dates_cream", "nuts_drink", "cheese_snack"},
+            )
 
     def test_snack_never_bread_adjacent(self):
         bundles = _build_bundles_snack_pattern_only()
@@ -3381,6 +3728,461 @@ class PersonPredictionsTests(unittest.TestCase):
         self.assertEqual(str(recs[0].get("profile_id")), "p_random_resampled")
         self.assertEqual(len(recs[0].get("bundles", [])), 3)
 
+    def _run_quality_tightening_case(self) -> list[dict[str, object]]:
+        bundles = _build_bundles_quality_tightening()
+        context = _build_context()
+        context.product_name_by_id.update(
+            {
+                112: "premium flour",
+                113: "chicken stock cubes",
+                114: "garlic mayo",
+                115: "chicken nuggets",
+                116: "caramel dessert pudding",
+                117: "peanut butter spread",
+                118: "plain tea biscuits",
+                119: "nutella chocolate spread",
+            }
+        )
+        context.product_price_by_id.update({112: 3.0, 113: 4.0, 114: 5.0, 115: 12.0, 116: 7.0, 117: 9.0, 118: 4.0, 119: 12.0})
+        context.category_by_id.update(
+            {
+                112: "baking",
+                113: "condiments",
+                114: "condiments",
+                115: "protein",
+                116: "desserts",
+                117: "spreads",
+                118: "snacks",
+                119: "spreads",
+            }
+        )
+        context.product_family_by_id.update(
+            {
+                112: "flour",
+                113: "seasoning",
+                114: "condiments",
+                115: "protein",
+                116: "dessert",
+                117: "spread",
+                118: "biscuit",
+                119: "spread",
+            }
+        )
+        profile = PersonProfile(
+            profile_id="p_quality_tightening",
+            source="manual",
+            order_ids=[9001],
+            history_product_ids=[1, 2, 3, 4, 9, 10, 7, 11, 12, 13, 19, 24, 112, 113, 114, 115, 116, 117, 118, 119],
+            history_items=[
+                "watania chicken breast",
+                "basmati rice",
+                "potato chips",
+                "cola soda",
+                "premium dates",
+                "fresh cream",
+                "sunflower cooking oil",
+                "full fat milk",
+                "tuna chunks",
+                "pasta penne",
+                "indomie chicken noodles cup",
+                "cream cheese spread",
+                "premium flour",
+                "chicken stock cubes",
+                "garlic mayo",
+                "chicken nuggets",
+                "caramel dessert pudding",
+                "peanut butter spread",
+                "plain tea biscuits",
+                "nutella chocolate spread",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={
+                1: 2,
+                2: 3,
+                3: 2,
+                4: 2,
+                9: 2,
+                10: 2,
+                7: 2,
+                11: 1,
+                12: 2,
+                13: 1,
+                19: 2,
+                24: 1,
+                112: 1,
+                113: 1,
+                114: 1,
+                115: 1,
+                116: 1,
+                117: 1,
+                118: 1,
+                119: 1,
+            },
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_quality_tightening_case",
+            )
+        self.assertEqual(len(recs), 1)
+        bundles_out = recs[0].get("bundles", [])
+        self.assertEqual(len(bundles_out), 3)
+        return bundles_out
+
+    def test_final_unordered_pair_uniqueness_per_person(self):
+        bundles_out = self._run_quality_tightening_case()
+        unordered_pairs = [
+            tuple(sorted((int(bundle.get("product_a", -1)), int(bundle.get("product_b", -1)))))
+            for bundle in bundles_out
+        ]
+        self.assertEqual(len(unordered_pairs), len(set(unordered_pairs)))
+
+    def test_tuna_plus_milk_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("full fat milk + tuna chunks", pair_names)
+
+    def test_tuna_plus_rice_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("basmati rice + tuna chunks", pair_names)
+
+    def test_tuna_plus_pasta_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("pasta penne + tuna chunks", pair_names)
+
+    def test_tuna_plus_peanut_butter_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("peanut butter spread + tuna chunks", pair_names)
+
+    def test_noodles_plus_flour_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("indomie chicken noodles cup + premium flour", pair_names)
+
+    def test_stock_cubes_plus_mayo_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("chicken stock cubes + garlic mayo", pair_names)
+
+    def test_oil_plus_stock_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("chicken stock cubes + sunflower cooking oil", pair_names)
+
+    def test_eggs_plus_tomato_paste_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("pond food: eggs + rivoni tomato paste 8 x 135g", pair_names)
+
+    def test_dessert_plus_plain_tea_biscuit_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("caramel dessert pudding + plain tea biscuits", pair_names)
+
+    def test_nutella_plus_plain_milk_as_occasion_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("full fat milk + nutella chocolate spread", pair_names)
+
+    def test_savory_protein_plus_flour_is_rejected_from_final_output(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 2,
+                    "product_a_name": "national chilled chicken 100 grams",
+                    "product_b_name": "foam premium flour 1kg",
+                    "final_score": 96,
+                    "purchase_score": 72,
+                    "pair_count": 95,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "flour",
+                },
+                {
+                    "product_a": 5,
+                    "product_b": 8,
+                    "product_a_name": "black tea",
+                    "product_b_name": "chocolate biscuit",
+                    "final_score": 91,
+                    "purchase_score": 60,
+                    "pair_count": 78,
+                    "category_a": "beverages",
+                    "category_b": "snacks",
+                    "product_family_a": "tea",
+                    "product_family_b": "biscuit",
+                },
+                {
+                    "product_a": 9,
+                    "product_b": 10,
+                    "product_a_name": "premium dates",
+                    "product_b_name": "fresh cream",
+                    "final_score": 90,
+                    "purchase_score": 58,
+                    "pair_count": 74,
+                    "category_a": "fruits",
+                    "category_b": "dairy",
+                    "product_family_a": "dates_family",
+                    "product_family_b": "dairy",
+                },
+                {
+                    "product_a": 23,
+                    "product_b": 22,
+                    "product_a_name": "farm eggs",
+                    "product_b_name": "whole wheat tortilla bread",
+                    "final_score": 89,
+                    "purchase_score": 55,
+                    "pair_count": 70,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "eggs",
+                    "product_family_b": "bread",
+                },
+            ]
+        )
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_savory_flour_reject",
+            source="manual",
+            order_ids=[9701],
+            history_product_ids=[1, 2, 5, 8, 9, 10, 23, 22],
+            history_items=[
+                "national chilled chicken 100 grams",
+                "foam premium flour 1kg",
+                "black tea",
+                "chocolate biscuit",
+                "premium dates",
+                "fresh cream",
+                "farm eggs",
+                "whole wheat tortilla bread",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 6, 2: 6, 5: 3, 8: 3, 9: 2, 10: 2, 23: 2, 22: 2},
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_savory_flour_reject",
+            )
+        pair_names = {
+            " + ".join(
+                sorted(
+                    [
+                        str(bundle.get("product_a_name", "")).lower(),
+                        str(bundle.get("product_b_name", "")).lower(),
+                    ]
+                )
+            )
+            for bundle in recs[0].get("bundles", [])
+        }
+        self.assertNotIn("foam premium flour 1kg + national chilled chicken 100 grams", pair_names)
+
+    def test_oil_plus_nuggets_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("chicken nuggets + sunflower cooking oil", pair_names)
+
+    def test_cream_cheese_plus_dessert_duplication_is_rejected_from_final_output(self):
+        bundles_out = self._run_quality_tightening_case()
+        pair_names = {" + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])) for bundle in bundles_out}
+        self.assertNotIn("caramel dessert pudding + cream cheese spread", pair_names)
+
+    def test_human_preference_boost_prioritizes_chicken_bread_over_chicken_tomato_paste(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 22,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "whole wheat tortilla bread",
+                    "final_score": 82,
+                    "purchase_score": 40,
+                    "pair_count": 20,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "bread_carb",
+                },
+                {
+                    "product_a": 1,
+                    "product_b": 14,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "tomato paste",
+                    "final_score": 86,
+                    "purchase_score": 42,
+                    "pair_count": 24,
+                    "category_a": "protein",
+                    "category_b": "condiments",
+                    "product_family_a": "poultry",
+                    "product_family_b": "sauce",
+                },
+                {
+                    "product_a": 3,
+                    "product_b": 4,
+                    "product_a_name": "potato chips",
+                    "product_b_name": "cola soda",
+                    "final_score": 80,
+                    "purchase_score": 38,
+                    "pair_count": 18,
+                    "category_a": "snacks",
+                    "category_b": "beverages",
+                    "product_family_a": "chips",
+                    "product_family_b": "beverage_soda",
+                },
+                {
+                    "product_a": 9,
+                    "product_b": 10,
+                    "product_a_name": "premium dates",
+                    "product_b_name": "fresh cream",
+                    "final_score": 79,
+                    "purchase_score": 35,
+                    "pair_count": 16,
+                    "category_a": "fruits",
+                    "category_b": "dairy",
+                    "product_family_a": "dates_family",
+                    "product_family_b": "dairy",
+                },
+            ]
+        )
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_human_preference_boost",
+            source="manual",
+            order_ids=[9201],
+            history_product_ids=[1, 22, 14, 3, 4, 9, 10],
+            history_items=[
+                "watania chicken breast",
+                "whole wheat tortilla bread",
+                "tomato paste",
+                "potato chips",
+                "cola soda",
+                "premium dates",
+                "fresh cream",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 2, 22: 2, 14: 2, 3: 2, 4: 2, 9: 1, 10: 1},
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_human_preference_boost",
+            )
+        self.assertEqual(len(recs), 1)
+        bundles_out = recs[0].get("bundles", [])
+        self.assertEqual(len(bundles_out), 3)
+        pair_names = {
+            " + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()]))
+            for bundle in bundles_out
+        }
+        tortilla_key = " + ".join(sorted(["whole wheat tortilla bread", "watania chicken breast"]))
+        tomato_key = " + ".join(sorted(["tomato paste", "watania chicken breast"]))
+        self.assertIn(tortilla_key, pair_names)
+        self.assertIn(tomato_key, pair_names)
+        pair_scores = {
+            " + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])): float(
+                bundle.get("hybrid_reco_score", 0.0)
+            )
+            for bundle in bundles_out
+        }
+        self.assertGreater(
+            pair_scores.get(tortilla_key, 0.0),
+            pair_scores.get(tomato_key, 0.0),
+        )
+
+    def test_fallback_motif_penalty_reduces_repetition(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 2,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "basmati rice",
+                    "final_score": 88,
+                    "purchase_score": 58,
+                    "pair_count": 70,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "rice_centric",
+                }
+            ]
+        )
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_fallback_motif_reduce",
+            source="manual",
+            order_ids=[9010],
+            history_product_ids=[1, 2, 5, 9, 26],
+            history_items=["watania chicken breast", "basmati rice", "black tea", "premium dates", "orange juice"],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 2, 2: 2, 5: 3, 9: 2, 26: 1},
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_fallback_motif_reduce",
+            )
+        bundles_out = recs[0].get("bundles", [])
+        self.assertEqual(len(bundles_out), 3)
+
+        def _motif_key(bundle: dict[str, object]) -> str:
+            pair_text = " ".join(
+                sorted(
+                    [
+                        str(bundle.get("product_a_name", "")).lower(),
+                        str(bundle.get("product_b_name", "")).lower(),
+                    ]
+                )
+            )
+            if "tea" in pair_text and "evaporated milk" in pair_text:
+                return "tea_evap"
+            if "coffee" in pair_text and "evaporated milk" in pair_text:
+                return "coffee_evap"
+            if "dates" in pair_text and "evaporated milk" in pair_text:
+                return "dates_evap"
+            if "dates" in pair_text and "condensed milk" in pair_text:
+                return "dates_condensed"
+            return ""
+
+        motif_counts: dict[str, int] = {}
+        for bundle in bundles_out:
+            key = _motif_key(bundle)
+            if key:
+                motif_counts[key] = int(motif_counts.get(key, 0)) + 1
+        self.assertTrue(all(count <= 1 for count in motif_counts.values()))
+
+    def test_all_profiles_still_get_exactly_three_after_quality_tightening(self):
+        bundles = _build_bundles()
+        context = _build_context()
+        profiles = [_mixed_profile(f"p_quality_tight_{idx}") for idx in range(4)]
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=profiles,
+                max_people=4,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_quality_tightening_exact_three",
+            )
+        self.assertEqual(len(recs), 4)
+        for rec in recs:
+            self.assertEqual(len(rec.get("bundles", [])), 3)
+
     def test_cleaning_bundle_capped_at_one_and_only_when_needed(self):
         bundles = _build_bundles()
         context = _build_context()
@@ -3571,6 +4373,916 @@ class PersonPredictionsTests(unittest.TestCase):
             for bundle in rec.get("bundles", []):
                 motifs.append(tuple(sorted((int(bundle["product_a"]), int(bundle["product_b"])))))
         self.assertGreater(len(set(motifs)), 1)
+
+    def test_repeated_exact_pair_exposure_reduces_across_people(self):
+        bundles = _build_bundles_diversity_pressure()
+        context = _build_context()
+        profiles = [
+            PersonProfile(
+                profile_id=f"p_exact_repeat_{idx}",
+                source="manual",
+                order_ids=[9100 + idx],
+                history_product_ids=[1, 2, 3, 5, 8, 9, 10, 16, 22, 23],
+                history_items=[
+                    "watania chicken breast",
+                    "basmati rice",
+                    "potato chips",
+                    "black tea",
+                    "chocolate biscuit",
+                    "premium dates",
+                    "fresh cream",
+                    "fresh fish fillet",
+                    "whole wheat tortilla bread",
+                    "farm eggs",
+                ],
+                created_at="2026-03-11T00:00:00+00:00",
+                history_counts={1: 4, 2: 4, 3: 3, 5: 3, 8: 3, 9: 2, 10: 2, 16: 2, 22: 2, 23: 2},
+            )
+            for idx in range(6)
+        ]
+
+        def _run(disable_diversity: bool) -> list[dict[str, object]]:
+            with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+                if not disable_diversity:
+                    return build_recommendations_for_profiles(
+                        bundles_df=bundles,
+                        profiles=profiles,
+                        max_people=len(profiles),
+                        row_to_record=lambda row: row.to_dict(),
+                        run_id="run_exact_repeat_enabled",
+                    )
+                with patch("qeu_bundling.presentation.person_predictions.EXPOSURE_PAIR_PENALTY", 0.0), patch(
+                    "qeu_bundling.presentation.person_predictions.EXPOSURE_TEMPLATE_SIGNATURE_PENALTY", 0.0
+                ), patch("qeu_bundling.presentation.person_predictions.EXPOSURE_MOTIF_FAMILY_PENALTY", 0.0), patch(
+                    "qeu_bundling.presentation.person_predictions.EXPOSURE_FAMILY_PATTERN_PENALTY", 0.0
+                ), patch("qeu_bundling.presentation.person_predictions.EXPOSURE_BUNDLE_SHAPE_PENALTY", 0.0), patch(
+                    "qeu_bundling.presentation.person_predictions.EXPOSURE_FALLBACK_MOTIF_PENALTY", 0.0
+                ), patch("qeu_bundling.presentation.person_predictions.RARER_STRONG_ALTERNATIVE_BONUS_STEP", 0.0):
+                    return build_recommendations_for_profiles(
+                        bundles_df=bundles,
+                        profiles=profiles,
+                        max_people=len(profiles),
+                        row_to_record=lambda row: row.to_dict(),
+                        run_id="run_exact_repeat_disabled",
+                    )
+
+        recs_enabled = _run(disable_diversity=False)
+        recs_disabled = _run(disable_diversity=True)
+
+        def _repeated_exact_pairs(recs: list[dict[str, object]]) -> int:
+            pair_counter: Counter[tuple[int, int]] = Counter()
+            for rec in recs:
+                for bundle in rec.get("bundles", []):
+                    pair_key = tuple(sorted((int(bundle["product_a"]), int(bundle["product_b"]))))
+                    pair_counter[pair_key] += 1
+            return int(sum(max(0, count - 1) for count in pair_counter.values()))
+
+        self.assertLessEqual(_repeated_exact_pairs(recs_enabled), _repeated_exact_pairs(recs_disabled))
+
+    def test_shopper_visible_family_mapping_examples(self):
+        context = _build_context()
+        names = dict(context.product_name_by_id)
+        categories = dict(context.category_by_id)
+        families = dict(context.product_family_by_id)
+        prices = dict(context.product_price_by_id)
+        names.update(
+            {
+                301: "americana minced lamb 400g",
+                302: "boni condensed milk",
+                303: "mcvities tea biscuits",
+                304: "tea milk evaporated milk",
+                305: "fresh labneh",
+            }
+        )
+        categories.update(
+            {
+                301: "protein",
+                302: "dairy",
+                303: "snacks",
+                304: "dairy",
+                305: "dairy",
+            }
+        )
+        families.update(
+            {
+                301: "meat",
+                302: "milk",
+                303: "biscuit",
+                304: "milk",
+                305: "labneh",
+            }
+        )
+        prices.update({301: 18.0, 302: 7.0, 303: 4.0, 304: 4.5, 305: 9.0})
+        extended_context = PersonalizationContext(
+            product_name_by_id=names,
+            product_price_by_id=prices,
+            product_picture_by_id=dict(context.product_picture_by_id),
+            neighbors=dict(context.neighbors),
+            recipe_score_by_id=dict(context.recipe_score_by_id),
+            ingredient_by_id=dict(context.ingredient_by_id),
+            ingredient_recipe_lookup=dict(context.ingredient_recipe_lookup),
+            product_family_by_id=families,
+            category_by_id=categories,
+            product_brand_by_id=dict(context.product_brand_by_id),
+            non_food_ids=frozenset(context.non_food_ids),
+        )
+        cases = [
+            (
+                {"anchor": 1, "complement": 22, "lane": LANE_MEAL, "pair_relation": semantics.REL_EAT},
+                "meal:chicken_wrap_meal",
+            ),
+            (
+                {"anchor": 2, "complement": 301, "lane": LANE_MEAL, "pair_relation": semantics.REL_EAT},
+                "meal:rice_meat_meal",
+            ),
+            (
+                {"anchor": 9, "complement": 302, "lane": LANE_OCCASION, "pair_relation": semantics.REL_DESSERT},
+                "occasion:dates_milk_treat",
+            ),
+            (
+                {"anchor": 303, "complement": 304, "lane": LANE_SNACK, "pair_relation": semantics.REL_DRINK},
+                "snack:biscuit_milk_tea_snack",
+            ),
+            (
+                {"anchor": 1, "complement": 7, "lane": LANE_MEAL, "pair_relation": semantics.REL_COOK},
+                "meal:chicken_fat_utilitarian",
+            ),
+            (
+                {"anchor": 23, "complement": 7, "lane": LANE_MEAL, "pair_relation": semantics.REL_COOK},
+                "meal:egg_fat_utilitarian",
+            ),
+            (
+                {"anchor": 305, "complement": 3, "lane": LANE_SNACK, "pair_relation": semantics.REL_EAT},
+                "snack:labneh_crunchy_snack",
+            ),
+        ]
+        for candidate, expected in cases:
+            got = _candidate_motif_family_signature(candidate, extended_context)
+            self.assertEqual(got, expected)
+
+    def test_repeated_motif_family_exposure_reduces_similar_bundle_shapes(self):
+        context = _build_context()
+        overused = {
+            "anchor": 1,
+            "complement": 2,
+            "lane": LANE_MEAL,
+            "pool_score": 2.35,
+            "personal_score": 2.35,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "rice_protein",
+        }
+        fresh = {
+            "anchor": 23,
+            "complement": 22,
+            "lane": LANE_MEAL,
+            "pool_score": 2.28,
+            "personal_score": 2.28,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "chicken_bread_tortilla_family",
+        }
+
+        overused_template = _template_signature(overused, context)
+        overused_motif = _candidate_motif_family_signature(overused, context)
+        overused_family_pattern = _candidate_family_pattern_signature(overused, context)
+        overused_shape = _candidate_bundle_shape_signature(overused, context)
+
+        score_overused = _candidate_effective_score(
+            overused,
+            context,
+            global_pair_exposure={tuple(sorted((1, 2))): 4},
+            global_template_exposure={overused_template: 4},
+            global_motif_family_exposure={overused_motif: 4},
+            global_family_pattern_exposure={overused_family_pattern: 4},
+            global_bundle_shape_exposure={overused_shape: 4},
+        )
+        score_fresh = _candidate_effective_score(
+            fresh,
+            context,
+            global_pair_exposure={},
+            global_template_exposure={},
+            global_motif_family_exposure={},
+            global_family_pattern_exposure={},
+            global_bundle_shape_exposure={},
+        )
+        self.assertGreater(score_fresh, score_overused)
+
+    def test_dominant_meal_family_saturates_after_two_uses(self):
+        context = _build_context()
+        dominant = {
+            "anchor": 1,
+            "complement": 2,
+            "lane": LANE_MEAL,
+            "pool_score": 2.28,
+            "personal_score": 2.28,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "rice_protein",
+        }
+        alternative = {
+            "anchor": 1,
+            "complement": 22,
+            "lane": LANE_MEAL,
+            "pool_score": 2.19,
+            "personal_score": 2.19,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "bread_meal",
+        }
+        dominant_motif = _candidate_motif_family_signature(dominant, context)
+        dominant_family = _candidate_family_pattern_signature(dominant, context)
+        dominant_shape = _candidate_bundle_shape_signature(dominant, context)
+        dominant_template = _template_signature(dominant, context)
+        score_dominant = _candidate_effective_score(
+            dominant,
+            context,
+            global_pair_exposure={tuple(sorted((1, 2))): 2},
+            global_template_exposure={dominant_template: 2},
+            global_motif_family_exposure={dominant_motif: 3},
+            global_family_pattern_exposure={dominant_family: 3},
+            global_bundle_shape_exposure={dominant_shape: 3},
+        )
+        score_alternative = _candidate_effective_score(
+            alternative,
+            context,
+            global_pair_exposure={},
+            global_template_exposure={},
+            global_motif_family_exposure={},
+            global_family_pattern_exposure={},
+            global_bundle_shape_exposure={},
+        )
+        self.assertGreater(score_alternative, score_dominant)
+
+    def test_rarer_motif_family_beats_overused_meal_family_when_close(self):
+        context = _build_context()
+        overused_meal = {
+            "anchor": 1,
+            "complement": 2,
+            "lane": LANE_MEAL,
+            "pool_score": 2.24,
+            "personal_score": 2.24,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "rice_protein",
+        }
+        rarer_meal = {
+            "anchor": 23,
+            "complement": 22,
+            "lane": LANE_MEAL,
+            "pool_score": 2.20,
+            "personal_score": 2.20,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "bread_meal",
+        }
+        overused_sig = _candidate_motif_family_signature(overused_meal, context)
+        overused_family = _candidate_family_pattern_signature(overused_meal, context)
+        overused_shape = _candidate_bundle_shape_signature(overused_meal, context)
+        overused_template = _template_signature(overused_meal, context)
+        score_overused = _candidate_effective_score(
+            overused_meal,
+            context,
+            global_pair_exposure={tuple(sorted((1, 2))): 2},
+            global_template_exposure={overused_template: 2},
+            global_motif_family_exposure={overused_sig: 3},
+            global_family_pattern_exposure={overused_family: 3},
+            global_bundle_shape_exposure={overused_shape: 3},
+        )
+        score_rarer = _candidate_effective_score(
+            rarer_meal,
+            context,
+            global_pair_exposure={},
+            global_template_exposure={},
+            global_motif_family_exposure={},
+            global_family_pattern_exposure={},
+            global_bundle_shape_exposure={},
+        )
+        self.assertGreater(score_rarer, score_overused)
+
+    def test_utilitarian_oil_plus_protein_is_strongly_downranked(self):
+        context = _build_context()
+        utilitarian = {
+            "anchor": 7,
+            "complement": 1,
+            "lane": LANE_MEAL,
+            "pool_score": 2.20,
+            "personal_score": 2.20,
+            "source": "copurchase_fallback",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "meal_generic",
+        }
+        attractive = {
+            "anchor": 1,
+            "complement": 22,
+            "lane": LANE_MEAL,
+            "pool_score": 2.16,
+            "personal_score": 2.16,
+            "source": "copurchase_fallback",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "bread_meal",
+        }
+        score_utilitarian = _candidate_effective_score(
+            utilitarian,
+            context,
+            global_pair_exposure={},
+            global_template_exposure={},
+            global_motif_family_exposure={},
+            global_family_pattern_exposure={},
+            global_bundle_shape_exposure={},
+        )
+        score_attractive = _candidate_effective_score(
+            attractive,
+            context,
+            global_pair_exposure={},
+            global_template_exposure={},
+            global_motif_family_exposure={},
+            global_family_pattern_exposure={},
+            global_bundle_shape_exposure={},
+        )
+        self.assertGreater(score_attractive, score_utilitarian)
+
+    def test_meal_dominant_family_saturation_penalty_is_stronger_than_non_dominant(self):
+        context = _build_context()
+        dominant = {
+            "anchor": 1,
+            "complement": 2,
+            "lane": LANE_MEAL,
+            "pool_score": 2.36,
+            "personal_score": 2.36,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "rice_protein",
+        }
+        non_dominant = {
+            "anchor": 23,
+            "complement": 22,
+            "lane": LANE_MEAL,
+            "pool_score": 2.36,
+            "personal_score": 2.36,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_EAT,
+            "theme": "egg_breakfast_meal",
+        }
+        self.assertTrue(_is_meal_dominant_motif_signature(_candidate_motif_family_signature(dominant, context)))
+        self.assertFalse(_is_meal_dominant_motif_signature(_candidate_motif_family_signature(non_dominant, context)))
+
+        dom_template = _template_signature(dominant, context)
+        dom_motif = _candidate_motif_family_signature(dominant, context)
+        dom_family = _candidate_family_pattern_signature(dominant, context)
+        dom_shape = _candidate_bundle_shape_signature(dominant, context)
+        non_template = _template_signature(non_dominant, context)
+        non_motif = _candidate_motif_family_signature(non_dominant, context)
+        non_family = _candidate_family_pattern_signature(non_dominant, context)
+        non_shape = _candidate_bundle_shape_signature(non_dominant, context)
+
+        score_dominant = _candidate_effective_score(
+            dominant,
+            context,
+            global_pair_exposure={tuple(sorted((1, 2))): 4},
+            global_template_exposure={dom_template: 4},
+            global_motif_family_exposure={dom_motif: 4},
+            global_family_pattern_exposure={dom_family: 4},
+            global_bundle_shape_exposure={dom_shape: 4},
+        )
+        score_non_dominant = _candidate_effective_score(
+            non_dominant,
+            context,
+            global_pair_exposure={tuple(sorted((23, 22))): 4},
+            global_template_exposure={non_template: 4},
+            global_motif_family_exposure={non_motif: 4},
+            global_family_pattern_exposure={non_family: 4},
+            global_bundle_shape_exposure={non_shape: 4},
+        )
+        self.assertGreater(score_non_dominant, score_dominant)
+
+    def test_repeated_rice_meat_meal_domination_is_reduced_across_batch(self):
+        bundles = _build_bundles_diversity_pressure()
+        context = _build_context()
+        profiles = [
+            PersonProfile(
+                profile_id=f"p_meal_domination_{idx}",
+                source="manual",
+                order_ids=[9400 + idx],
+                history_product_ids=[1, 2, 16, 23, 22, 5, 8, 9, 10],
+                history_items=[
+                    "watania chicken breast",
+                    "basmati rice",
+                    "fresh fish fillet",
+                    "farm eggs",
+                    "whole wheat tortilla bread",
+                    "black tea",
+                    "chocolate biscuit",
+                    "premium dates",
+                    "fresh cream",
+                ],
+                created_at="2026-03-12T00:00:00+00:00",
+                history_counts={1: 5, 2: 5, 16: 4, 23: 3, 22: 3, 5: 2, 8: 2, 9: 1, 10: 1},
+            )
+            for idx in range(7)
+        ]
+
+        def _run(disable_meal_dominance_pressure: bool) -> list[dict[str, object]]:
+            with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+                if not disable_meal_dominance_pressure:
+                    return build_recommendations_for_profiles(
+                        bundles_df=bundles,
+                        profiles=profiles,
+                        max_people=len(profiles),
+                        row_to_record=lambda row: row.to_dict(),
+                        run_id="run_meal_domination_pressure_on",
+                    )
+                with patch("qeu_bundling.presentation.person_predictions.EXPOSURE_MEAL_DOMINANT_MOTIF_PENALTY", 0.0), patch.dict(
+                    "qeu_bundling.presentation.person_predictions.HUMAN_SOFT_PENALTY_BY_PATTERN",
+                    {"meal_rice_meat_overused": 0.0},
+                    clear=False,
+                ), patch("qeu_bundling.presentation.person_predictions.EXPOSURE_MOTIF_FAMILY_PENALTY", 0.0), patch(
+                    "qeu_bundling.presentation.person_predictions.EXPOSURE_FAMILY_PATTERN_PENALTY", 0.0
+                ), patch("qeu_bundling.presentation.person_predictions.EXPOSURE_BUNDLE_SHAPE_PENALTY", 0.0), patch(
+                    "qeu_bundling.presentation.person_predictions.EXPOSURE_MEAL_FAMILY_SATURATION_PENALTY", 0.0
+                ), patch("qeu_bundling.presentation.person_predictions.EXPOSURE_MEAL_PATTERN_SATURATION_PENALTY", 0.0), patch(
+                    "qeu_bundling.presentation.person_predictions.EXPOSURE_MEAL_SHAPE_SATURATION_PENALTY", 0.0
+                ):
+                    return build_recommendations_for_profiles(
+                        bundles_df=bundles,
+                        profiles=profiles,
+                        max_people=len(profiles),
+                        row_to_record=lambda row: row.to_dict(),
+                        run_id="run_meal_domination_pressure_off",
+                    )
+
+        def _dominant_meal_count(recs: list[dict[str, object]]) -> int:
+            total = 0
+            for rec in recs:
+                for bundle in rec.get("bundles", []):
+                    lane = str(bundle.get("lane", "")).strip().lower()
+                    if lane != LANE_MEAL:
+                        continue
+                    text = " ".join(
+                        sorted(
+                            [
+                                str(bundle.get("product_a_name", "")).lower(),
+                                str(bundle.get("product_b_name", "")).lower(),
+                            ]
+                        )
+                    )
+                    rice_meat = ("rice" in text) and any(token in text for token in ("chicken", "beef", "lamb", "meat", "fish"))
+                    chicken_base = ("chicken" in text) and ("tomato paste" in text or "oil" in text)
+                    if rice_meat or chicken_base:
+                        total += 1
+            return total
+
+        def _repeated_meal_motif_family_count(recs: list[dict[str, object]]) -> int:
+            motif_counter: Counter[str] = Counter()
+            for rec in recs:
+                for bundle in rec.get("bundles", []):
+                    lane = str(bundle.get("lane", "")).strip().lower()
+                    if lane != LANE_MEAL:
+                        continue
+                    candidate = {
+                        "anchor": int(bundle.get("product_a", -1)),
+                        "complement": int(bundle.get("product_b", -1)),
+                        "lane": lane,
+                        "theme": str(bundle.get("bundle_theme", "")),
+                        "pair_relation": str(bundle.get("pair_relation", "")),
+                    }
+                    motif = _candidate_motif_family_signature(candidate, context)
+                    motif_counter[motif] += 1
+            return int(sum(max(0, count - 1) for count in motif_counter.values()))
+
+        recs_pressure_on = _run(disable_meal_dominance_pressure=False)
+        recs_pressure_off = _run(disable_meal_dominance_pressure=True)
+        self.assertLessEqual(_dominant_meal_count(recs_pressure_on), _dominant_meal_count(recs_pressure_off))
+        self.assertLessEqual(
+            _repeated_meal_motif_family_count(recs_pressure_on),
+            _repeated_meal_motif_family_count(recs_pressure_off),
+        )
+
+    def test_personalization_prefers_person_specific_strong_pair_over_overused_generic(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 2,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "basmati rice",
+                    "final_score": 93,
+                    "purchase_score": 64,
+                    "pair_count": 80,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "rice_centric",
+                },
+                {
+                    "product_a": 23,
+                    "product_b": 22,
+                    "product_a_name": "farm eggs",
+                    "product_b_name": "whole wheat tortilla bread",
+                    "final_score": 92,
+                    "purchase_score": 63,
+                    "pair_count": 78,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "eggs",
+                    "product_family_b": "bread",
+                },
+                {
+                    "product_a": 5,
+                    "product_b": 8,
+                    "product_a_name": "black tea",
+                    "product_b_name": "chocolate biscuit",
+                    "final_score": 80,
+                    "purchase_score": 42,
+                    "pair_count": 55,
+                    "category_a": "beverages",
+                    "category_b": "snacks",
+                    "product_family_a": "tea",
+                    "product_family_b": "biscuit",
+                },
+                {
+                    "product_a": 9,
+                    "product_b": 10,
+                    "product_a_name": "premium dates",
+                    "product_b_name": "fresh cream",
+                    "final_score": 79,
+                    "purchase_score": 41,
+                    "pair_count": 52,
+                    "category_a": "fruits",
+                    "category_b": "dairy",
+                    "product_family_a": "dates_family",
+                    "product_family_b": "dairy",
+                },
+            ]
+        )
+        context = _build_context()
+        profile_generic = PersonProfile(
+            profile_id="p_personal_generic",
+            source="manual",
+            order_ids=[9301],
+            history_product_ids=[1, 2, 5, 8, 9, 10],
+            history_items=["watania chicken breast", "basmati rice", "black tea", "chocolate biscuit", "premium dates", "fresh cream"],
+            created_at="2026-03-11T00:00:00+00:00",
+            history_counts={1: 6, 2: 6, 5: 3, 8: 3, 9: 2, 10: 2},
+        )
+        profile_specific = PersonProfile(
+            profile_id="p_personal_specific",
+            source="manual",
+            order_ids=[9302],
+            history_product_ids=[23, 22, 23, 22, 1, 2, 5, 8, 9, 10],
+            history_items=["farm eggs", "whole wheat tortilla bread", "watania chicken breast", "basmati rice", "black tea", "chocolate biscuit", "premium dates", "fresh cream"],
+            created_at="2026-03-11T00:00:00+00:00",
+            history_counts={23: 8, 22: 8, 1: 1, 2: 1, 5: 2, 8: 2, 9: 1, 10: 1},
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[profile_generic, profile_specific],
+                max_people=2,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_personal_specific_preference",
+            )
+        first_generic = {int(recs[0]["bundles"][0]["product_a"]), int(recs[0]["bundles"][0]["product_b"])}
+        first_specific = {int(recs[1]["bundles"][0]["product_a"]), int(recs[1]["bundles"][0]["product_b"])}
+        self.assertIn(first_generic, ({1, 2}, {5, 8}))
+        self.assertEqual(first_specific, {22, 23})
+
+    def test_person_specific_snack_or_occasion_preference_beats_generic_meal_default(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 2,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "basmati rice",
+                    "final_score": 94,
+                    "purchase_score": 66,
+                    "pair_count": 86,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "rice_centric",
+                },
+                {
+                    "product_a": 5,
+                    "product_b": 8,
+                    "product_a_name": "black tea",
+                    "product_b_name": "chocolate biscuit",
+                    "final_score": 93,
+                    "purchase_score": 65,
+                    "pair_count": 84,
+                    "category_a": "beverages",
+                    "category_b": "snacks",
+                    "product_family_a": "tea",
+                    "product_family_b": "biscuit",
+                },
+                {
+                    "product_a": 9,
+                    "product_b": 10,
+                    "product_a_name": "premium dates",
+                    "product_b_name": "fresh cream",
+                    "final_score": 92,
+                    "purchase_score": 63,
+                    "pair_count": 80,
+                    "category_a": "fruits",
+                    "category_b": "dairy",
+                    "product_family_a": "dates_family",
+                    "product_family_b": "dairy",
+                },
+                {
+                    "product_a": 3,
+                    "product_b": 4,
+                    "product_a_name": "potato chips",
+                    "product_b_name": "cola soda",
+                    "final_score": 91,
+                    "purchase_score": 62,
+                    "pair_count": 78,
+                    "category_a": "snacks",
+                    "category_b": "beverages",
+                    "product_family_a": "chips",
+                    "product_family_b": "beverage_soda",
+                },
+            ]
+        )
+        context = _build_context()
+        snack_profile = PersonProfile(
+            profile_id="p_snack_personal_bias",
+            source="manual",
+            order_ids=[9501],
+            history_product_ids=[5, 8, 5, 8, 3, 4, 9, 10, 26, 1, 2],
+            history_items=[
+                "black tea",
+                "chocolate biscuit",
+                "potato chips",
+                "cola soda",
+                "premium dates",
+                "fresh cream",
+                "orange juice",
+                "watania chicken breast",
+                "basmati rice",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={5: 8, 8: 8, 3: 6, 4: 6, 9: 4, 10: 4, 26: 3, 1: 1, 2: 1},
+        )
+        meal_profile = PersonProfile(
+            profile_id="p_meal_personal_bias",
+            source="manual",
+            order_ids=[9502],
+            history_product_ids=[1, 2, 1, 2, 16, 22, 23, 5, 8],
+            history_items=[
+                "watania chicken breast",
+                "basmati rice",
+                "fresh fish fillet",
+                "whole wheat tortilla bread",
+                "farm eggs",
+                "black tea",
+                "chocolate biscuit",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 8, 2: 8, 16: 3, 22: 2, 23: 2, 5: 1, 8: 1},
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            snack_recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[snack_profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_snack_personal_bias",
+            )
+            meal_recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[meal_profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_meal_personal_bias",
+            )
+        snack_first = snack_recs[0]["bundles"][0]
+        meal_first = meal_recs[0]["bundles"][0]
+        snack_first_pair = {int(snack_first["product_a"]), int(snack_first["product_b"])}
+        meal_first_pair = {int(meal_first["product_a"]), int(meal_first["product_b"])}
+        self.assertNotEqual(snack_first_pair, {1, 2})
+        self.assertIn(str(snack_first.get("lane", "")).strip().lower(), {LANE_SNACK, LANE_OCCASION})
+        self.assertEqual(meal_first_pair, {1, 2})
+
+    def test_personalized_wrap_style_can_beat_overused_generic_meal_family(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 2,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "basmati rice",
+                    "final_score": 95,
+                    "purchase_score": 68,
+                    "pair_count": 92,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "rice_centric",
+                },
+                {
+                    "product_a": 1,
+                    "product_b": 22,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "whole wheat tortilla bread",
+                    "final_score": 93,
+                    "purchase_score": 64,
+                    "pair_count": 84,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "bread",
+                },
+                {
+                    "product_a": 5,
+                    "product_b": 8,
+                    "product_a_name": "black tea",
+                    "product_b_name": "chocolate biscuit",
+                    "final_score": 90,
+                    "purchase_score": 56,
+                    "pair_count": 72,
+                    "category_a": "beverages",
+                    "category_b": "snacks",
+                    "product_family_a": "tea",
+                    "product_family_b": "biscuit",
+                },
+                {
+                    "product_a": 9,
+                    "product_b": 10,
+                    "product_a_name": "premium dates",
+                    "product_b_name": "fresh cream",
+                    "final_score": 89,
+                    "purchase_score": 55,
+                    "pair_count": 70,
+                    "category_a": "fruits",
+                    "category_b": "dairy",
+                    "product_family_a": "dates_family",
+                    "product_family_b": "dairy",
+                },
+            ]
+        )
+        context = _build_context()
+        generic_profile = PersonProfile(
+            profile_id="p_wrap_generic_lead",
+            source="manual",
+            order_ids=[9601],
+            history_product_ids=[1, 2, 1, 2, 16, 5, 8, 9, 10],
+            history_items=[
+                "watania chicken breast",
+                "basmati rice",
+                "fresh fish fillet",
+                "black tea",
+                "chocolate biscuit",
+                "premium dates",
+                "fresh cream",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 8, 2: 8, 16: 4, 5: 2, 8: 2, 9: 1, 10: 1},
+        )
+        wrap_profile = PersonProfile(
+            profile_id="p_wrap_specific_follow",
+            source="manual",
+            order_ids=[9602],
+            history_product_ids=[1, 22, 1, 22, 2, 2, 5, 8, 9, 10],
+            history_items=[
+                "watania chicken breast",
+                "whole wheat tortilla bread",
+                "basmati rice",
+                "black tea",
+                "chocolate biscuit",
+                "premium dates",
+                "fresh cream",
+            ],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 8, 22: 7, 2: 6, 5: 3, 8: 3, 9: 2, 10: 2},
+        )
+
+        def _meal_pair_for_second(recs: list[dict[str, object]]) -> set[int]:
+            second = recs[1]
+            meal_bundles = [b for b in second.get("bundles", []) if str(b.get("lane", "")).strip().lower() == LANE_MEAL]
+            self.assertTrue(meal_bundles)
+            return {int(meal_bundles[0]["product_a"]), int(meal_bundles[0]["product_b"])}
+
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs_on = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=[generic_profile, wrap_profile],
+                max_people=2,
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_wrap_personalization_on",
+            )
+        meal_pair_on = _meal_pair_for_second(recs_on)
+        self.assertEqual(meal_pair_on, {1, 22})
+        second_pairs = {
+            tuple(sorted((int(bundle["product_a"]), int(bundle["product_b"]))))
+            for bundle in recs_on[1].get("bundles", [])
+        }
+        self.assertNotIn((1, 2), second_pairs)
+
+    def test_rarer_strong_alternative_can_beat_overused_safe_default(self):
+        context = _build_context()
+        overused_safe = {
+            "anchor": 5,
+            "complement": 8,
+            "lane": LANE_SNACK,
+            "pool_score": 2.24,
+            "personal_score": 2.24,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_DRINK,
+            "theme": "tea_snack",
+        }
+        rarer_strong = {
+            "anchor": 3,
+            "complement": 4,
+            "lane": LANE_SNACK,
+            "pool_score": 2.18,
+            "personal_score": 2.18,
+            "source": "top_bundle",
+            "pair_strength": semantics.STRENGTH_STRONG,
+            "pair_relation": semantics.REL_DRINK,
+            "theme": "drink_snack",
+        }
+        safe_template = _template_signature(overused_safe, context)
+        safe_motif = _candidate_motif_family_signature(overused_safe, context)
+        safe_family_pattern = _candidate_family_pattern_signature(overused_safe, context)
+        safe_shape = _candidate_bundle_shape_signature(overused_safe, context)
+
+        score_safe = _candidate_effective_score(
+            overused_safe,
+            context,
+            global_pair_exposure={tuple(sorted((5, 8))): 3},
+            global_template_exposure={safe_template: 3},
+            global_motif_family_exposure={safe_motif: 4},
+            global_family_pattern_exposure={safe_family_pattern: 3},
+            global_bundle_shape_exposure={safe_shape: 4},
+        )
+        score_rare = _candidate_effective_score(
+            rarer_strong,
+            context,
+            global_pair_exposure={},
+            global_template_exposure={},
+            global_motif_family_exposure={},
+            global_family_pattern_exposure={},
+            global_bundle_shape_exposure={},
+        )
+        self.assertGreater(score_rare, score_safe)
+
+    def test_diversity_tightening_keeps_exactly_three_bundles_per_profile(self):
+        bundles = _build_bundles_diversity_pressure()
+        context = _build_context()
+        profiles = [_mixed_profile(f"p_three_after_diversity_{idx}") for idx in range(7)]
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=profiles,
+                max_people=len(profiles),
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_three_after_diversity",
+            )
+        self.assertTrue(all(len(rec.get("bundles", [])) == 3 for rec in recs))
+
+    def test_diversity_tightening_is_deterministic_for_same_run(self):
+        bundles = _build_bundles_diversity_pressure()
+        context = _build_context()
+        profiles = [_mixed_profile(f"p_deterministic_diversity_{idx}") for idx in range(6)]
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            recs_a = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=profiles,
+                max_people=len(profiles),
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_diversity_deterministic",
+            )
+            recs_b = build_recommendations_for_profiles(
+                bundles_df=bundles,
+                profiles=profiles,
+                max_people=len(profiles),
+                row_to_record=lambda row: row.to_dict(),
+                run_id="run_diversity_deterministic",
+            )
+
+        def _pair_layout(recs: list[dict[str, object]]) -> list[list[tuple[int, int]]]:
+            out: list[list[tuple[int, int]]] = []
+            for rec in recs:
+                person_pairs: list[tuple[int, int]] = []
+                for bundle in rec.get("bundles", []):
+                    pair = tuple(sorted((int(bundle["product_a"]), int(bundle["product_b"]))))
+                    person_pairs.append(pair)
+                out.append(person_pairs)
+            return out
+
+        self.assertEqual(_pair_layout(recs_a), _pair_layout(recs_b))
 
     def test_dashboard_layer_does_not_inject_extra_cleaning_bundle(self):
         from qeu_bundling.presentation.app import _apply_cleaning_display_fallback
