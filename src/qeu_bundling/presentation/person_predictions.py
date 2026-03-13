@@ -19,6 +19,7 @@ import pandas as pd
 
 from qeu_bundling.config.paths import get_paths
 from qeu_bundling.core.feedback_memory import build_pair_multiplier_lookup, pair_feedback_multiplier
+from qeu_bundling.core.pricing import margin_discounted_sale_price, price_paid_and_free_items
 from qeu_bundling.presentation import bundle_semantics as semantics
 from qeu_bundling.review.feedback_loader import build_feedback_lookup, load_bundle_feedback
 
@@ -2401,11 +2402,21 @@ def _build_display_dict_from_row(row: pd.Series) -> dict[str, object]:
 
     product_a_price = float(pd.to_numeric(d.get("product_a_price", 0.0), errors="coerce") or 0.0)
     product_b_price = float(pd.to_numeric(d.get("product_b_price", 0.0), errors="coerce") or 0.0)
+    purchase_price_a = float(pd.to_numeric(d.get("purchase_price_a", product_a_price), errors="coerce") or product_a_price)
+    purchase_price_b = float(pd.to_numeric(d.get("purchase_price_b", product_b_price), errors="coerce") or product_b_price)
+    purchase_missing_a = int(float(pd.to_numeric(d.get("purchase_price_missing_a", 1), errors="coerce") or 1))
+    purchase_missing_b = int(float(pd.to_numeric(d.get("purchase_price_missing_b", 1), errors="coerce") or 1))
     d.setdefault("product_a_price", product_a_price)
     d.setdefault("product_b_price", product_b_price)
+    d["purchase_price_a"] = round(purchase_price_a, 2)
+    d["purchase_price_b"] = round(purchase_price_b, 2)
+    d["purchase_price_missing_a"] = int(purchase_missing_a)
+    d["purchase_price_missing_b"] = int(purchase_missing_b)
 
     d["price_a_sar"] = f"{product_a_price:,.2f}"
     d["price_b_sar"] = f"{product_b_price:,.2f}"
+    d["purchase_price_a_sar"] = f"{purchase_price_a:,.2f}"
+    d["purchase_price_b_sar"] = f"{purchase_price_b:,.2f}"
 
     discount_a = float(pd.to_numeric(d.get("discount_pred_a", d.get("discount_a", 12.0)), errors="coerce") or 0.0)
     discount_b = float(pd.to_numeric(d.get("discount_pred_b", d.get("discount_b", 12.0)), errors="coerce") or 0.0)
@@ -2414,15 +2425,26 @@ def _build_display_dict_from_row(row: pd.Series) -> dict[str, object]:
     d["discount_pred_a"] = discount_a
     d["discount_pred_b"] = discount_b
 
-    free = str(d.get("free_product", d.get("free_product_raw", ""))).strip().lower()
-    if free not in {"product_a", "product_b", "product_c"}:
-        free = "product_a" if product_a_price <= product_b_price else "product_b"
-    d["free_product"] = free
+    priced = price_paid_and_free_items(
+        sale_price_a=product_a_price,
+        purchase_price_a=purchase_price_a,
+        discount_pct_a=discount_a,
+        sale_price_b=product_b_price,
+        purchase_price_b=purchase_price_b,
+        discount_pct_b=discount_b,
+    )
+    d["free_product"] = str(priced["free_product"])
+    d["paid_product"] = "product_a" if str(priced["paid_side"]) == "a" else "product_b"
 
-    after_a = 0.0 if free == "product_a" else max(0.0, product_a_price * (1 - discount_a / 100.0))
-    after_b = 0.0 if free == "product_b" else max(0.0, product_b_price * (1 - discount_b / 100.0))
+    after_a = float(priced["price_after_discount_a"])
+    after_b = float(priced["price_after_discount_b"])
+    d["price_after_discount_a"] = round(after_a, 2)
+    d["price_after_discount_b"] = round(after_b, 2)
     d["price_after_a_sar"] = f"{after_a:,.2f}"
     d["price_after_b_sar"] = f"{after_b:,.2f}"
+    d["unit_profit_a"] = float(priced.get("unit_profit_a", 0.0))
+    d["unit_profit_b"] = float(priced.get("unit_profit_b", 0.0))
+    d["paid_item_final_price"] = float(after_a if d["paid_product"] == "product_a" else after_b)
 
     d.setdefault("is_triple", bool(d.get("is_triple_bundle", False)))
     d.setdefault("product_c_name", "")
@@ -2448,12 +2470,23 @@ def _build_constrained_pair_record(anchor: int, complement: int, context: Person
         price_a = 10.0
         price_b = 5.0
 
-    free = "product_a" if price_a <= price_b else "product_b"
+    purchase_a = float(price_a)
+    purchase_b = float(price_b)
     discount_a = 12.0
     discount_b = 12.0
 
-    after_a = 0.0 if free == "product_a" else max(0.0, price_a * (1 - discount_a / 100.0))
-    after_b = 0.0 if free == "product_b" else max(0.0, price_b * (1 - discount_b / 100.0))
+    priced = price_paid_and_free_items(
+        sale_price_a=price_a,
+        purchase_price_a=purchase_a,
+        discount_pct_a=discount_a,
+        sale_price_b=price_b,
+        purchase_price_b=purchase_b,
+        discount_pct_b=discount_b,
+    )
+    after_a = float(priced["price_after_discount_a"])
+    after_b = float(priced["price_after_discount_b"])
+    free = str(priced["free_product"])
+    paid_product = "product_a" if str(priced["paid_side"]) == "a" else "product_b"
 
     return {
         "product_a": int(anchor),
@@ -2462,10 +2495,19 @@ def _build_constrained_pair_record(anchor: int, complement: int, context: Person
         "product_b_name": name_b,
         "product_a_price": round(price_a, 2),
         "product_b_price": round(price_b, 2),
+        "purchase_price_a": round(purchase_a, 2),
+        "purchase_price_b": round(purchase_b, 2),
+        "purchase_price_missing_a": 1,
+        "purchase_price_missing_b": 1,
         "price_a_sar": f"{price_a:,.2f}",
         "price_b_sar": f"{price_b:,.2f}",
+        "purchase_price_a_sar": f"{purchase_a:,.2f}",
+        "purchase_price_b_sar": f"{purchase_b:,.2f}",
         "price_after_a_sar": f"{after_a:,.2f}",
         "price_after_b_sar": f"{after_b:,.2f}",
+        "price_after_discount_a": round(after_a, 2),
+        "price_after_discount_b": round(after_b, 2),
+        "paid_product": paid_product,
         "free_product": free,
         "discount_a": discount_a,
         "discount_b": discount_b,
@@ -5530,6 +5572,9 @@ def _swap_pair_fields(display: dict[str, object]) -> None:
         ("product_a", "product_b"),
         ("product_a_name", "product_b_name"),
         ("product_a_price", "product_b_price"),
+        ("purchase_price_a", "purchase_price_b"),
+        ("purchase_price_missing_a", "purchase_price_missing_b"),
+        ("purchase_price_a_sar", "purchase_price_b_sar"),
         ("price_a_sar", "price_b_sar"),
         ("price_after_discount_a", "price_after_discount_b"),
         ("price_after_a_sar", "price_after_b_sar"),
@@ -5549,7 +5594,20 @@ def _swap_pair_fields(display: dict[str, object]) -> None:
 
 
 def _force_item2_free(display: dict[str, object]) -> None:
+    price_a = _safe_float(display.get("product_a_price"), default=0.0)
+    purchase_a = _safe_float(display.get("purchase_price_a"), default=price_a)
+    if purchase_a <= 0:
+        purchase_a = max(0.0, price_a)
+    discount_a = _safe_float(display.get("discount_pred_a", display.get("discount_a", 0.0)), default=0.0)
+    final_paid = margin_discounted_sale_price(price_a, purchase_a, discount_a)
+
     display["free_product"] = "product_b"
+    display["paid_product"] = "product_a"
+    display["purchase_price_a"] = round(float(purchase_a), 2)
+    display["purchase_price_a_sar"] = f"{purchase_a:,.2f}"
+    display["price_after_discount_a"] = round(float(final_paid), 2)
+    display["price_after_a_sar"] = f"{final_paid:,.2f}"
+    display["paid_item_final_price"] = round(float(final_paid), 2)
     if "price_after_discount_b" in display:
         display["price_after_discount_b"] = 0.0
     if "price_after_b_sar" in display:
@@ -5644,12 +5702,10 @@ def _maybe_swap_to_make_free_item_cheaper(
     if float(price_b) <= float(price_a):
         _force_item2_free(display)
         return
-    if not _swap_preserves_lane_semantics(display, lane, context):
-        _force_item2_free(display)
-        return
     _swap_pair_fields(display)
     display["swapped"] = True
     display["swap_reason"] = "make_free_item_cheaper"
+    del lane, context
     _force_item2_free(display)
 
 
@@ -5672,12 +5728,26 @@ def _display_dict_for_choice(choice: dict[str, object], context: Personalization
         display["product_a_name"] = str(context.product_name_by_id.get(anchor, display.get("product_a_name", f"Product {anchor}")))
         display["product_b_name"] = str(context.product_name_by_id.get(complement, display.get("product_b_name", f"Product {complement}")))
 
-    price_a = float(context.product_price_by_id.get(anchor, _safe_float(display.get("product_a_price"), default=0.0)))
-    price_b = float(context.product_price_by_id.get(complement, _safe_float(display.get("product_b_price"), default=0.0)))
+    row_price_a = _safe_float(display.get("product_a_price"), default=0.0)
+    row_price_b = _safe_float(display.get("product_b_price"), default=0.0)
+    price_a = float(row_price_a if row_price_a > 0 else context.product_price_by_id.get(anchor, 0.0))
+    price_b = float(row_price_b if row_price_b > 0 else context.product_price_by_id.get(complement, 0.0))
+    purchase_a = _safe_float(display.get("purchase_price_a"), default=price_a)
+    purchase_b = _safe_float(display.get("purchase_price_b"), default=price_b)
+    if purchase_a <= 0:
+        purchase_a = max(0.0, price_a)
+        display["purchase_price_missing_a"] = 1
+    if purchase_b <= 0:
+        purchase_b = max(0.0, price_b)
+        display["purchase_price_missing_b"] = 1
     display["product_a_price"] = round(price_a, 2)
     display["product_b_price"] = round(price_b, 2)
+    display["purchase_price_a"] = round(float(purchase_a), 2)
+    display["purchase_price_b"] = round(float(purchase_b), 2)
     display["price_a_sar"] = f"{price_a:,.2f}"
     display["price_b_sar"] = f"{price_b:,.2f}"
+    display["purchase_price_a_sar"] = f"{purchase_a:,.2f}"
+    display["purchase_price_b_sar"] = f"{purchase_b:,.2f}"
     _force_item2_free(display)
     return display
 

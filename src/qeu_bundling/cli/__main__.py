@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
 from qeu_bundling.config.paths import ensure_layout, get_paths, migrate_legacy_data
 
 
@@ -69,7 +70,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "serve":
-        if str(args.host).strip().lower() in {"127.0.0.1", "localhost"}:
+        host = str(args.host).strip() or "127.0.0.1"
+        port = int(args.port)
+        host_lc = host.lower()
+
+        if host_lc in {"127.0.0.1", "localhost"}:
             os.environ.setdefault("QEU_LOCAL_FAST_MODE", "1")
             os.environ.setdefault("QEU_DASHBOARD_DEFAULT_PERSON_COUNT", "5")
 
@@ -77,7 +82,16 @@ def main(argv: list[str] | None = None) -> int:
 
         os.environ.setdefault("QEU_PROJECT_ROOT", str(paths.project_root))
         prewarm_local_dashboard_defaults()
-        flask_app.run(host=args.host, port=args.port, debug=False)
+        if host == "0.0.0.0":
+            try:
+                lan_ip = socket.gethostbyname(socket.gethostname())
+            except OSError:
+                lan_ip = ""
+            if lan_ip and lan_ip != "127.0.0.1":
+                print(f"LAN URL: http://{lan_ip}:{port}")
+            else:
+                print("LAN URL could not be resolved via socket.gethostbyname(socket.gethostname()).")
+        flask_app.run(host=host, port=port, debug=False)
         return 0
 
     if args.command == "usage":

@@ -184,7 +184,16 @@
                       <div class="anchor-block__name-ar">{{ (anchor_item.name_ar if anchor_item else bundle.product_a_name_ar) or bundle.product_a_name }}</div>
                       <div class="anchor-block__name-en">{{ (anchor_item.name if anchor_item else bundle.product_a_name) or "" }}</div>
                       <div class="anchor-block__price-row">
-                        <span class="anchor-block__price">SAR {{ anchor_item.price_sar if anchor_item else "-" }}</span>
+                        <span class="complement-block__original-price">SAR {{ (anchor_item.original_price_sar if anchor_item else bundle.price_a_sar) or "-" }}</span>
+                      </div>
+                      <div class="anchor-block__price-row">
+                        <span class="lane-card__reason">{{ t.get("purchase_cost_ar", "سعر التكلفة") }}: SAR {{ (anchor_item.purchase_price_sar if anchor_item else bundle.purchase_price_a_sar) or "-" }}</span>
+                      </div>
+                      <div class="anchor-block__price-row">
+                        <span class="complement-block__after-price">SAR {{ (anchor_item.price_after_sar if anchor_item else bundle.price_after_a_sar) or "-" }}</span>
+                        {% if anchor_item and anchor_item.discount %}
+                          <span class="complement-block__discount-badge">{{ anchor_item.discount }}</span>
+                        {% endif %}
                       </div>
                     </div>
                   </div>
@@ -248,5 +257,4 @@
 {% block scripts %}
   <script src="{{ url_for('static', filename='dashboard_people.js') }}"></script>
 {% endblock %}
-
 

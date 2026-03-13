@@ -9,6 +9,11 @@ import numpy as np
 import pandas as pd
 
 from qeu_bundling.config.paths import get_paths
+from qeu_bundling.core.pricing import (
+    load_odoo_price_lookup,
+    price_paid_and_free_items,
+    resolve_sale_and_purchase,
+)
 from qeu_bundling.core.product_name_translation import translate_arabic_to_english
 
 DISCOUNT_CAP_PCT = 30.0
@@ -158,6 +163,66 @@ def _is_weak_evidence_row(row: pd.Series) -> bool:
     return cp_score == 0.0 and recipe_norm < RECIPE_ONLY_MIN_SCORE_NORM and known_prior == 0
 
 
+def _apply_margin_safe_pricing(
+    bundles: pd.DataFrame,
+    price_lookup: dict[int, object],
+) -> pd.DataFrame:
+    out = bundles.copy()
+
+    def _row_pricing(row: pd.Series) -> pd.Series:
+        pid_a_raw = pd.to_numeric(row.get("product_a", -1), errors="coerce")
+        pid_b_raw = pd.to_numeric(row.get("product_b", -1), errors="coerce")
+        pid_a = int(pid_a_raw) if pd.notna(pid_a_raw) else -1
+        pid_b = int(pid_b_raw) if pd.notna(pid_b_raw) else -1
+
+        fallback_sale_a_raw = pd.to_numeric(row.get("product_a_price", 0.0), errors="coerce")
+        fallback_sale_b_raw = pd.to_numeric(row.get("product_b_price", 0.0), errors="coerce")
+        discount_a_raw = pd.to_numeric(row.get("discount_pred_a", 0.0), errors="coerce")
+        discount_b_raw = pd.to_numeric(row.get("discount_pred_b", 0.0), errors="coerce")
+        fallback_sale_a = float(fallback_sale_a_raw) if pd.notna(fallback_sale_a_raw) else 0.0
+        fallback_sale_b = float(fallback_sale_b_raw) if pd.notna(fallback_sale_b_raw) else 0.0
+        discount_a = float(discount_a_raw) if pd.notna(discount_a_raw) else 0.0
+        discount_b = float(discount_b_raw) if pd.notna(discount_b_raw) else 0.0
+
+        sale_a, purchase_a, missing_purchase_a = resolve_sale_and_purchase(pid_a, fallback_sale_a, price_lookup)
+        sale_b, purchase_b, missing_purchase_b = resolve_sale_and_purchase(pid_b, fallback_sale_b, price_lookup)
+
+        priced = price_paid_and_free_items(
+            sale_price_a=sale_a,
+            purchase_price_a=purchase_a,
+            discount_pct_a=discount_a,
+            sale_price_b=sale_b,
+            purchase_price_b=purchase_b,
+            discount_pct_b=discount_b,
+        )
+        paid_product = "product_a" if str(priced["paid_side"]) == "a" else "product_b"
+        paid_final = float(
+            priced["price_after_discount_a"] if paid_product == "product_a" else priced["price_after_discount_b"]
+        )
+        return pd.Series(
+            {
+                "product_a_price": round(float(sale_a), 2),
+                "product_b_price": round(float(sale_b), 2),
+                "purchase_price_a": round(float(purchase_a), 2),
+                "purchase_price_b": round(float(purchase_b), 2),
+                "purchase_price_missing_a": int(bool(missing_purchase_a)),
+                "purchase_price_missing_b": int(bool(missing_purchase_b)),
+                "free_product": str(priced["free_product"]),
+                "paid_product": paid_product,
+                "price_after_discount_a": round(float(priced["price_after_discount_a"]), 2),
+                "price_after_discount_b": round(float(priced["price_after_discount_b"]), 2),
+                "unit_profit_a": round(float(priced["unit_profit_a"]), 4),
+                "unit_profit_b": round(float(priced["unit_profit_b"]), 4),
+                "paid_item_final_price": round(float(paid_final), 2),
+            }
+        )
+
+    priced_df = out.apply(_row_pricing, axis=1)
+    for col in priced_df.columns:
+        out[col] = priced_df[col]
+    return out
+
+
 def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> pd.DataFrame:
     """Score candidate pairs for people-only recommendation serving."""
     base = data_dir or _data_dir()
@@ -195,14 +260,22 @@ def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> 
     bundles["discount_pred_a"] = np.clip(discount_pred[:, 0], 0, DISCOUNT_CAP_PCT).round(2)
     bundles["discount_pred_b"] = np.clip(discount_pred[:, 1], 0, DISCOUNT_CAP_PCT).round(2)
 
-    cheaper_item = np.where(
-        pd.to_numeric(bundles["product_a_price"], errors="coerce").fillna(0.0)
-        <= pd.to_numeric(bundles["product_b_price"], errors="coerce").fillna(0.0),
-        "product_a",
-        "product_b",
-    )
+    odoo_price_lookup, odoo_meta = load_odoo_price_lookup(paths.project_root)
+    if odoo_meta:
+        workbook = str(odoo_meta.get("workbook_path", ""))
+        id_col = str(odoo_meta.get("id_column", ""))
+        sale_col = str(odoo_meta.get("sale_column", ""))
+        purchase_col = str(odoo_meta.get("purchase_column", ""))
+        if workbook:
+            print(
+                "  Odoo pricing lookup: "
+                f"path={workbook} id_col={id_col or '-'} sale_col={sale_col or '-'} "
+                f"purchase_col={purchase_col or '-'} rows={len(odoo_price_lookup):,}"
+            )
+
+    bundles = _apply_margin_safe_pricing(bundles, odoo_price_lookup)
+
     bundles["free_item_pred"] = pred_free
-    bundles["free_product"] = cheaper_item
     if "recipe_score_norm" not in bundles.columns:
         bundles["recipe_score_norm"] = (
             pd.to_numeric(bundles.get("recipe_score", 0.0), errors="coerce").fillna(0.0) / 100.0
@@ -232,19 +305,6 @@ def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> 
     bundles = _join_pictures(bundles, base)
     bundles = _translate_names(bundles, base)
 
-    bundles["price_after_discount_a"] = bundles.apply(
-        lambda r: 0.0
-        if str(r.get("free_product", "")).strip().lower() == "product_a"
-        else round(float(r.get("product_a_price", 0.0)) * (1 - float(r.get("discount_pred_a", 0.0)) / 100.0), 2),
-        axis=1,
-    )
-    bundles["price_after_discount_b"] = bundles.apply(
-        lambda r: 0.0
-        if str(r.get("free_product", "")).strip().lower() == "product_b"
-        else round(float(r.get("product_b_price", 0.0)) * (1 - float(r.get("discount_pred_b", 0.0)) / 100.0), 2),
-        axis=1,
-    )
-
     if "final_score" not in bundles.columns:
         bundles["final_score"] = pd.to_numeric(bundles.get("new_final_score", 0.0), errors="coerce").fillna(0.0)
 
@@ -259,13 +319,21 @@ def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> 
         "product_b_name",
         "product_a_price",
         "product_b_price",
+        "purchase_price_a",
+        "purchase_price_b",
+        "purchase_price_missing_a",
+        "purchase_price_missing_b",
         "product_a_picture",
         "product_b_picture",
+        "paid_product",
         "free_product",
         "discount_pred_a",
         "discount_pred_b",
         "price_after_discount_a",
         "price_after_discount_b",
+        "paid_item_final_price",
+        "unit_profit_a",
+        "unit_profit_b",
         "purchase_score",
         "pair_count",
         "known_prior_flag",
@@ -317,7 +385,7 @@ def predict_single(product_a_features: dict, product_b_features: dict) -> dict:
         df[col] = df[col].astype(str)
     X = preprocessor.transform(df[ALL_FEATURES])
 
-    free_item = int(clf.predict(X)[0])
+    clf.predict(X)
     disc = reg.predict(X)
     if disc.ndim == 1:
         disc_a = disc_b = float(np.clip(disc[0], 0, DISCOUNT_CAP_PCT))
@@ -325,11 +393,31 @@ def predict_single(product_a_features: dict, product_b_features: dict) -> dict:
         disc_a = float(np.clip(disc[0, 0], 0, DISCOUNT_CAP_PCT))
         disc_b = float(np.clip(disc[0, 1], 0, DISCOUNT_CAP_PCT))
 
+    sale_a_raw = pd.to_numeric(row.get("product_a_price", 0.0), errors="coerce")
+    sale_b_raw = pd.to_numeric(row.get("product_b_price", 0.0), errors="coerce")
+    sale_a = float(sale_a_raw) if pd.notna(sale_a_raw) else 0.0
+    sale_b = float(sale_b_raw) if pd.notna(sale_b_raw) else 0.0
+    purchase_a_raw = pd.to_numeric(row.get("purchase_price_a", sale_a), errors="coerce")
+    purchase_b_raw = pd.to_numeric(row.get("purchase_price_b", sale_b), errors="coerce")
+    purchase_a = float(purchase_a_raw) if pd.notna(purchase_a_raw) and float(purchase_a_raw) > 0 else sale_a
+    purchase_b = float(purchase_b_raw) if pd.notna(purchase_b_raw) and float(purchase_b_raw) > 0 else sale_b
+    priced = price_paid_and_free_items(
+        sale_price_a=sale_a,
+        purchase_price_a=purchase_a,
+        discount_pct_a=disc_a,
+        sale_price_b=sale_b,
+        purchase_price_b=purchase_b,
+        discount_pct_b=disc_b,
+    )
+
     return {
-        "free_product": "product_a" if free_item == 0 else "product_b",
+        "free_product": str(priced["free_product"]),
+        "paid_product": "product_a" if str(priced["paid_side"]) == "a" else "product_b",
         "discount_amount": round((disc_a + disc_b) / 2, 2),
         "discount_a": round(disc_a, 2),
         "discount_b": round(disc_b, 2),
+        "price_after_discount_a": float(priced["price_after_discount_a"]),
+        "price_after_discount_b": float(priced["price_after_discount_b"]),
     }
 
 
