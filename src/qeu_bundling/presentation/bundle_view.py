@@ -100,6 +100,16 @@ def _normalise_bundle_columns(df: pd.DataFrame) -> pd.DataFrame:
     data["product_b_price"] = pd.to_numeric(
         _series_from_columns(data, ["product_b_price", "price_b_sar"], 0.0), errors="coerce"
     ).fillna(0.0)
+    purchase_a = pd.to_numeric(
+        _series_from_columns(data, ["purchase_price_a", "product_a_purchase_price"], float("nan")),
+        errors="coerce",
+    )
+    purchase_b = pd.to_numeric(
+        _series_from_columns(data, ["purchase_price_b", "product_b_purchase_price"], float("nan")),
+        errors="coerce",
+    )
+    data["purchase_price_a"] = purchase_a.where(purchase_a > 0, data["product_a_price"]).fillna(data["product_a_price"])
+    data["purchase_price_b"] = purchase_b.where(purchase_b > 0, data["product_b_price"]).fillna(data["product_b_price"])
 
     data["discount_pred_a"] = pd.to_numeric(
         _series_from_columns(data, ["discount_pred_a", "discount_a"], 0.0), errors="coerce"
@@ -120,6 +130,8 @@ def _normalise_bundle_columns(df: pd.DataFrame) -> pd.DataFrame:
 
     data["price_a_sar"] = data["product_a_price"].map(lambda v: f"{float(v):,.2f}")
     data["price_b_sar"] = data["product_b_price"].map(lambda v: f"{float(v):,.2f}")
+    data["purchase_price_a_sar"] = data["purchase_price_a"].map(lambda v: f"{float(v):,.2f}")
+    data["purchase_price_b_sar"] = data["purchase_price_b"].map(lambda v: f"{float(v):,.2f}")
     data["price_after_a_sar"] = data["price_after_discount_a"].map(lambda v: f"{float(v):,.2f}")
     data["price_after_b_sar"] = data["price_after_discount_b"].map(lambda v: f"{float(v):,.2f}")
 
@@ -177,25 +189,45 @@ def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
     discount_b = float(pd.to_numeric(rec.get("discount_pred_b", rec.get("discount_b", 0.0)), errors="coerce") or 0.0)
 
     slots = [
-        ("product_a", "product_a_name", "price_a_sar", "price_after_a_sar", discount_a, "product_a_picture"),
-        ("product_b", "product_b_name", "price_b_sar", "price_after_b_sar", discount_b, "product_b_picture"),
+        (
+            "product_a",
+            "product_a_name",
+            "price_a_sar",
+            "price_after_a_sar",
+            "purchase_price_a_sar",
+            discount_a,
+            "product_a_picture",
+        ),
+        (
+            "product_b",
+            "product_b_name",
+            "price_b_sar",
+            "price_after_b_sar",
+            "purchase_price_b_sar",
+            discount_b,
+            "product_b_picture",
+        ),
     ]
 
     paid: list[dict[str, object]] = []
     free_item: dict[str, object] | None = None
-    for key, name_key, price_key, after_key, disc, pic_key in slots:
+    for key, name_key, price_key, after_key, purchase_key, disc, pic_key in slots:
         name = str(rec.get(name_key, "") or "").strip()
         if not name:
             continue
+        is_free = key == free
+        effective_after = "0.00" if is_free else str(rec.get(after_key, "0") or "0")
         item = {
             "name": name,
             "price_sar": str(rec.get(price_key, "0") or "0"),
-            "price_after_sar": str(rec.get(after_key, "0") or "0"),
-            "discount": f"{disc:,.1f}%",
-            "is_free": key == free,
+            "original_price_sar": str(rec.get(price_key, "0") or "0"),
+            "purchase_price_sar": str(rec.get(purchase_key, "0") or "0"),
+            "price_after_sar": effective_after,
+            "discount": "100%" if is_free else f"{disc:,.1f}%",
+            "is_free": is_free,
             "image_url": str(rec.get(pic_key, "") or "").strip(),
         }
-        if key == free:
+        if is_free:
             free_item = item
         else:
             paid.append(item)

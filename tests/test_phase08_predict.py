@@ -5,7 +5,12 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from qeu_bundling.pipeline.phase_08_predict import _is_weak_evidence_row, _join_pictures
+from qeu_bundling.core.pricing import ProductPriceRecord
+from qeu_bundling.pipeline.phase_08_predict import (
+    _apply_margin_safe_pricing,
+    _is_weak_evidence_row,
+    _join_pictures,
+)
 
 
 class Phase08PredictTests(unittest.TestCase):
@@ -41,6 +46,68 @@ class Phase08PredictTests(unittest.TestCase):
 
         self.assertEqual(out.loc[0, "product_a_picture"], "http://processed/a.png")
         self.assertEqual(out.loc[0, "product_b_picture"], "/static/product_images/local-b.png")
+
+    def test_apply_margin_safe_pricing_respects_purchase_floor_and_paid_item(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 101,
+                    "product_b": 202,
+                    "product_a_price": 20.0,
+                    "product_b_price": 10.0,
+                    "discount_pred_a": 30.0,
+                    "discount_pred_b": 15.0,
+                }
+            ]
+        )
+        odoo_lookup = {
+            101: ProductPriceRecord(sale_price=20.0, purchase_price=19.0),
+            202: ProductPriceRecord(sale_price=30.0, purchase_price=10.0),
+        }
+
+        out = _apply_margin_safe_pricing(bundles, odoo_lookup)
+        row = out.iloc[0]
+
+        self.assertEqual(float(row["product_a_price"]), 20.0)
+        self.assertEqual(float(row["product_b_price"]), 30.0)
+        self.assertEqual(float(row["purchase_price_a"]), 19.0)
+        self.assertEqual(float(row["purchase_price_b"]), 10.0)
+        self.assertEqual(str(row["free_product"]), "product_a")
+        self.assertEqual(str(row["paid_product"]), "product_b")
+        self.assertEqual(float(row["price_after_discount_a"]), 0.0)
+        # Margin discount for paid item (B): margin=20, disc=15% => final=10 + 17 = 27
+        self.assertEqual(float(row["price_after_discount_b"]), 27.0)
+        self.assertGreaterEqual(float(row["price_after_discount_b"]), float(row["purchase_price_b"]))
+
+    def test_apply_margin_safe_pricing_handles_missing_purchase_cost_safely(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 303,
+                    "product_b": 404,
+                    "product_a_price": 15.0,
+                    "product_b_price": 5.0,
+                    "discount_pred_a": 25.0,
+                    "discount_pred_b": 25.0,
+                }
+            ]
+        )
+        # product_a purchase missing -> fallback purchase = sale
+        odoo_lookup = {
+            303: ProductPriceRecord(sale_price=15.0, purchase_price=0.0),
+            404: ProductPriceRecord(sale_price=5.0, purchase_price=2.0),
+        }
+
+        out = _apply_margin_safe_pricing(bundles, odoo_lookup)
+        row = out.iloc[0]
+
+        self.assertEqual(str(row["paid_product"]), "product_a")
+        self.assertEqual(str(row["free_product"]), "product_b")
+        self.assertEqual(int(row["purchase_price_missing_a"]), 1)
+        self.assertEqual(float(row["purchase_price_a"]), 15.0)
+        # Missing purchase cost fallback should prevent below-cost discounting.
+        self.assertEqual(float(row["price_after_discount_a"]), 15.0)
+        self.assertEqual(float(row["price_after_discount_b"]), 0.0)
 
 
 if __name__ == "__main__":
