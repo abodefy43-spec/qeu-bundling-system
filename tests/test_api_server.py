@@ -16,39 +16,39 @@ class ApiServerTests(unittest.TestCase):
         self.assertEqual(res.mimetype, "application/json")
         self.assertEqual(res.get_json(), {"status": "ok"})
 
-    def test_recommendations_endpoint_returns_minimal_json_and_caps_to_three(self):
+    def test_recommendations_endpoint_returns_item_ids_and_fixed_margin_bundle_price(self):
         raw_bundles = [
             {
                 "product_a": 10123,
                 "product_b": 20456,
                 "product_a_price": 20.00,
                 "product_b_price": 12.00,
-                "price_after_discount_a": 13.45,
-                "price_after_discount_b": 0.0,
+                "purchase_price_a": 10.00,
+                "purchase_price_b": 8.00,
             },
             {
                 "product_a": 30111,
                 "product_b": 30199,
                 "product_a_price": 9.00,
-                "product_b_price": 4.00,
-                "price_after_discount_a": 7.58,
-                "price_after_discount_b": 0.0,
+                "product_b_price": 14.00,
+                "purchase_price_a": 6.00,
+                "purchase_price_b": 4.00,
             },
             {
                 "product_a": 50123,
                 "product_b": 50188,
                 "product_a_price": 11.00,
                 "product_b_price": 6.00,
-                "price_after_discount_a": 7.90,
-                "price_after_discount_b": 0.0,
+                "purchase_price_a": 6.00,
+                "purchase_price_b": 3.00,
             },
             {
                 "product_a": 90001,
                 "product_b": 90002,
                 "product_a_price": 50.00,
                 "product_b_price": 30.00,
-                "price_after_discount_a": 35.00,
-                "price_after_discount_b": 0.0,
+                "purchase_price_a": 20.00,
+                "purchase_price_b": 10.00,
             },
         ]
         with patch("qeu_bundling.api.server._recommendation_records_for_user", return_value=raw_bundles):
@@ -65,8 +65,7 @@ class ApiServerTests(unittest.TestCase):
             {
                 "item_1_id": 10123,
                 "item_2_id": 20456,
-                "free_item_id": 20456,
-                "paid_item_discount_amount": 6.55,
+                "bundle_price": 12.0,
             },
         )
         self.assertEqual(
@@ -74,8 +73,7 @@ class ApiServerTests(unittest.TestCase):
             {
                 "item_1_id": 30111,
                 "item_2_id": 30199,
-                "free_item_id": 30199,
-                "paid_item_discount_amount": 1.42,
+                "bundle_price": 6.0,
             },
         )
         self.assertEqual(
@@ -83,8 +81,7 @@ class ApiServerTests(unittest.TestCase):
             {
                 "item_1_id": 50123,
                 "item_2_id": 50188,
-                "free_item_id": 50188,
-                "paid_item_discount_amount": 3.1,
+                "bundle_price": 7.0,
             },
         )
         self.assertNotIn("html", res.get_data(as_text=True).lower())
@@ -126,4 +123,3 @@ class ApiServerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
