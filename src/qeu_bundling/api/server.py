@@ -13,6 +13,7 @@ import pandas as pd
 from flask import Flask, jsonify, request
 
 from qeu_bundling.config.paths import get_paths
+from qeu_bundling.core.pricing import margin_discounted_sale_price
 from qeu_bundling.core.run_manifest import read_latest_manifest
 from qeu_bundling.presentation.bundle_view import load_bundle_view, row_to_record
 from qeu_bundling.presentation.person_predictions import (
@@ -26,6 +27,7 @@ MAX_BUNDLES = 3
 MIN_HISTORY_PRODUCTS = 2
 MAX_ORDER_IDS_PER_PROFILE = 6
 USER_ID_COLUMNS = ("user_id", "customer_id", "customer_no", "partner_id")
+FIXED_MARGIN_DISCOUNT_PCT = 80.0
 
 
 class CustomerNotFoundError(RuntimeError):
@@ -213,27 +215,16 @@ def _bundle_to_api_record(bundle: dict[str, object]) -> dict[str, object] | None
 
     sale_a = max(0.0, _safe_float(bundle.get("product_a_price"), default=_safe_float(bundle.get("price_a_sar"), 0.0)))
     sale_b = max(0.0, _safe_float(bundle.get("product_b_price"), default=_safe_float(bundle.get("price_b_sar"), 0.0)))
+    purchase_a = max(0.0, _safe_float(bundle.get("purchase_price_a"), default=sale_a))
+    purchase_b = max(0.0, _safe_float(bundle.get("purchase_price_b"), default=sale_b))
     if sale_a >= sale_b:
-        free_item_id = int(item_2_id)
-        original_paid_price = float(sale_a)
-        final_paid_price = max(
-            0.0,
-            _safe_float(bundle.get("price_after_discount_a"), default=_safe_float(bundle.get("price_after_a_sar"), 0.0)),
-        )
+        final_paid_price = margin_discounted_sale_price(sale_a, purchase_a, FIXED_MARGIN_DISCOUNT_PCT)
     else:
-        free_item_id = int(item_1_id)
-        original_paid_price = float(sale_b)
-        final_paid_price = max(
-            0.0,
-            _safe_float(bundle.get("price_after_discount_b"), default=_safe_float(bundle.get("price_after_b_sar"), 0.0)),
-        )
-
-    discount_amount = round(max(0.0, float(original_paid_price - final_paid_price)), 2)
+        final_paid_price = margin_discounted_sale_price(sale_b, purchase_b, FIXED_MARGIN_DISCOUNT_PCT)
     return {
         "item_1_id": int(item_1_id),
         "item_2_id": int(item_2_id),
-        "free_item_id": int(free_item_id),
-        "paid_item_discount_amount": float(discount_amount),
+        "bundle_price": float(round(final_paid_price, 2)),
     }
 
 
@@ -327,4 +318,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
