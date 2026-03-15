@@ -12,6 +12,19 @@ env/
 .DS_Store
 Thumbs.db
 
+# Secrets / credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.jks
+*.crt
+*.cer
+*.pfx
+*credentials*.json
+*service-account*.json
+
 # Logs
 *.log
 
