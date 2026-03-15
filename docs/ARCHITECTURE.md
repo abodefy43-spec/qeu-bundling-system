@@ -66,6 +66,24 @@ latest manifest + person_candidates_scored.csv + filtered_orders.pkl
     -> dashboard.html render
 ```
 
+### Final selection hygiene (person-level)
+- Final selection is centralized in `presentation/person_predictions.py` via `_select_final_candidates_for_person()`.
+- This final stage applies, in order:
+  - consumption compatibility hard blocks (`_consumption_pair_reject_reason`)
+  - strict no-item-reuse within one person (an item can appear once across selected bundles)
+  - cross-person pair repetition penalty (session/run scoped)
+  - tuna soft penalty (final-stage ranking only; tuna is not banned)
+  - fallback motif caps and nonfood cap
+- Lane labels (`meal/snack/occasion/nonfood`) remain visible metadata; final selection does not enforce lane quotas.
+
+### Pricing contract
+- Bundle paid-item pricing is fixed to **80% discount on profit margin**:
+  - `final_paid_price = purchase_price + 0.2 * (sale_price - purchase_price)`
+- Shared constant/helpers live in `core/pricing.py`:
+  - `FIXED_MARGIN_DISCOUNT_PCT`
+  - `price_paid_and_free_items_fixed_margin()`
+- API (`api/server.py`), phase-08 output shaping (`pipeline/phase_08_predict.py`), and dashboard rendering paths consume the same fixed-margin rule.
+
 ## Request lifecycle
 1. Client requests `/`.
 2. `presentation/app.py` loads run status and session-scoped person state.

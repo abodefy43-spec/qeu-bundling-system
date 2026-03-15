@@ -5,18 +5,17 @@ from __future__ import annotations
 import pickle
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 from qeu_bundling.config.paths import get_paths
 from qeu_bundling.core.pricing import (
+    FIXED_MARGIN_DISCOUNT_PCT,
     load_odoo_price_lookup,
-    price_paid_and_free_items,
+    price_paid_and_free_items_fixed_margin,
     resolve_sale_and_purchase,
 )
 from qeu_bundling.core.product_name_translation import translate_arabic_to_english
 
-DISCOUNT_CAP_PCT = 30.0
 PERSON_CANDIDATES_INPUT = "person_candidate_pairs.csv"
 PERSON_CANDIDATES_OUTPUT = "person_candidates_scored.csv"
 RECIPE_ONLY_MIN_SCORE_NORM = 0.25
@@ -63,11 +62,9 @@ def _diagnostics_dir() -> Path:
 def _load_models(output_dir: Path):
     with (output_dir / "free_item_model.pkl").open("rb") as fh:
         clf = pickle.load(fh)
-    with (output_dir / "discount_model.pkl").open("rb") as fh:
-        reg = pickle.load(fh)
     with (output_dir / "preprocessor.pkl").open("rb") as fh:
         preprocessor = pickle.load(fh)
-    return clf, reg, preprocessor
+    return clf, preprocessor
 
 
 def _sample_ranked_pool(ranked: pd.DataFrame, max_rows: int = 120, run_seed: int | None = 42) -> pd.DataFrame:
@@ -177,23 +174,17 @@ def _apply_margin_safe_pricing(
 
         fallback_sale_a_raw = pd.to_numeric(row.get("product_a_price", 0.0), errors="coerce")
         fallback_sale_b_raw = pd.to_numeric(row.get("product_b_price", 0.0), errors="coerce")
-        discount_a_raw = pd.to_numeric(row.get("discount_pred_a", 0.0), errors="coerce")
-        discount_b_raw = pd.to_numeric(row.get("discount_pred_b", 0.0), errors="coerce")
         fallback_sale_a = float(fallback_sale_a_raw) if pd.notna(fallback_sale_a_raw) else 0.0
         fallback_sale_b = float(fallback_sale_b_raw) if pd.notna(fallback_sale_b_raw) else 0.0
-        discount_a = float(discount_a_raw) if pd.notna(discount_a_raw) else 0.0
-        discount_b = float(discount_b_raw) if pd.notna(discount_b_raw) else 0.0
 
         sale_a, purchase_a, missing_purchase_a = resolve_sale_and_purchase(pid_a, fallback_sale_a, price_lookup)
         sale_b, purchase_b, missing_purchase_b = resolve_sale_and_purchase(pid_b, fallback_sale_b, price_lookup)
 
-        priced = price_paid_and_free_items(
+        priced = price_paid_and_free_items_fixed_margin(
             sale_price_a=sale_a,
             purchase_price_a=purchase_a,
-            discount_pct_a=discount_a,
             sale_price_b=sale_b,
             purchase_price_b=purchase_b,
-            discount_pct_b=discount_b,
         )
         paid_product = "product_a" if str(priced["paid_side"]) == "a" else "product_b"
         paid_final = float(
@@ -214,6 +205,7 @@ def _apply_margin_safe_pricing(
                 "unit_profit_a": round(float(priced["unit_profit_a"]), 4),
                 "unit_profit_b": round(float(priced["unit_profit_b"]), 4),
                 "paid_item_final_price": round(float(paid_final), 2),
+                "margin_discount_pct": float(FIXED_MARGIN_DISCOUNT_PCT),
             }
         )
 
@@ -249,16 +241,10 @@ def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> 
 
     bundles = _ensure_feature_columns(bundles)
 
-    clf, reg, preprocessor = _load_models(out_dir)
+    clf, preprocessor = _load_models(out_dir)
     X = preprocessor.transform(bundles[ALL_FEATURES])
 
     pred_free = clf.predict(X)
-    discount_pred = reg.predict(X)
-    if discount_pred.ndim == 1:
-        discount_pred = np.column_stack([discount_pred, discount_pred])
-
-    bundles["discount_pred_a"] = np.clip(discount_pred[:, 0], 0, DISCOUNT_CAP_PCT).round(2)
-    bundles["discount_pred_b"] = np.clip(discount_pred[:, 1], 0, DISCOUNT_CAP_PCT).round(2)
 
     odoo_price_lookup, odoo_meta = load_odoo_price_lookup(paths.project_root)
     if odoo_meta:
@@ -327,8 +313,6 @@ def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> 
         "product_b_picture",
         "paid_product",
         "free_product",
-        "discount_pred_a",
-        "discount_pred_b",
         "price_after_discount_a",
         "price_after_discount_b",
         "paid_item_final_price",
@@ -377,7 +361,7 @@ def predict_bundles(data_dir: Path | None = None, run_seed: int | None = 42) -> 
 def predict_single(product_a_features: dict, product_b_features: dict) -> dict:
     """Predict bundle outcome for an arbitrary product pair."""
     out = _output_dir()
-    clf, reg, preprocessor = _load_models(out)
+    clf, preprocessor = _load_models(out)
 
     row = {**product_a_features, **product_b_features}
     df = pd.DataFrame([row])
@@ -386,12 +370,6 @@ def predict_single(product_a_features: dict, product_b_features: dict) -> dict:
     X = preprocessor.transform(df[ALL_FEATURES])
 
     clf.predict(X)
-    disc = reg.predict(X)
-    if disc.ndim == 1:
-        disc_a = disc_b = float(np.clip(disc[0], 0, DISCOUNT_CAP_PCT))
-    else:
-        disc_a = float(np.clip(disc[0, 0], 0, DISCOUNT_CAP_PCT))
-        disc_b = float(np.clip(disc[0, 1], 0, DISCOUNT_CAP_PCT))
 
     sale_a_raw = pd.to_numeric(row.get("product_a_price", 0.0), errors="coerce")
     sale_b_raw = pd.to_numeric(row.get("product_b_price", 0.0), errors="coerce")
@@ -401,21 +379,17 @@ def predict_single(product_a_features: dict, product_b_features: dict) -> dict:
     purchase_b_raw = pd.to_numeric(row.get("purchase_price_b", sale_b), errors="coerce")
     purchase_a = float(purchase_a_raw) if pd.notna(purchase_a_raw) and float(purchase_a_raw) > 0 else sale_a
     purchase_b = float(purchase_b_raw) if pd.notna(purchase_b_raw) and float(purchase_b_raw) > 0 else sale_b
-    priced = price_paid_and_free_items(
+    priced = price_paid_and_free_items_fixed_margin(
         sale_price_a=sale_a,
         purchase_price_a=purchase_a,
-        discount_pct_a=disc_a,
         sale_price_b=sale_b,
         purchase_price_b=purchase_b,
-        discount_pct_b=disc_b,
     )
 
     return {
         "free_product": str(priced["free_product"]),
         "paid_product": "product_a" if str(priced["paid_side"]) == "a" else "product_b",
-        "discount_amount": round((disc_a + disc_b) / 2, 2),
-        "discount_a": round(disc_a, 2),
-        "discount_b": round(disc_b, 2),
+        "discount_amount": round(float(FIXED_MARGIN_DISCOUNT_PCT), 2),
         "price_after_discount_a": float(priced["price_after_discount_a"]),
         "price_after_discount_b": float(priced["price_after_discount_b"]),
     }
@@ -432,8 +406,6 @@ if __name__ == "__main__":
         "product_a_name",
         "product_b_name",
         "free_product",
-        "discount_pred_a",
-        "discount_pred_b",
         "final_score",
     ]
     show = [c for c in cols if c in result.columns]

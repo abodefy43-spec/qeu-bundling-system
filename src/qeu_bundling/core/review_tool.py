@@ -61,16 +61,15 @@ def display_bundle(idx, row):
     price_a = row.get("product_a_price", 0)
     price_b = row.get("product_b_price", 0)
     free_item = row.get("free_product", "product_a")
-    discount_a = row.get("discount_pred_a", 0)
-    discount_b = row.get("discount_pred_b", 0)
+    margin_discount = float(pd.to_numeric(row.get("margin_discount_pct", 80.0), errors="coerce") or 80.0)
     
     print(f"\nProduct A: {product_a}")
-    print(f"  Price: SAR {price_a:.2f}  |  Discount: {discount_a:.1f}%")
+    print(f"  Price: SAR {price_a:.2f}  |  Margin Discount: {margin_discount:.1f}%")
     if free_item == "product_a":
         print(f"  >>> FREE <<<")
     
     print(f"\nProduct B: {product_b}")
-    print(f"  Price: SAR {price_b:.2f}  |  Discount: {discount_b:.1f}%")
+    print(f"  Price: SAR {price_b:.2f}  |  Margin Discount: {margin_discount:.1f}%")
     if free_item == "product_b":
         print(f"  >>> FREE <<<")
     

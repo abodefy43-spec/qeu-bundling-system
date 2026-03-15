@@ -9,6 +9,7 @@ from pathlib import Path
 import pandas as pd
 
 from qeu_bundling.config.paths import get_paths
+from qeu_bundling.core.pricing import FIXED_MARGIN_DISCOUNT_PCT
 from qeu_bundling.core.run_manifest import resolve_latest_artifact
 
 
@@ -111,12 +112,10 @@ def _normalise_bundle_columns(df: pd.DataFrame) -> pd.DataFrame:
     data["purchase_price_a"] = purchase_a.where(purchase_a > 0, data["product_a_price"]).fillna(data["product_a_price"])
     data["purchase_price_b"] = purchase_b.where(purchase_b > 0, data["product_b_price"]).fillna(data["product_b_price"])
 
-    data["discount_pred_a"] = pd.to_numeric(
-        _series_from_columns(data, ["discount_pred_a", "discount_a"], 0.0), errors="coerce"
-    ).fillna(0.0)
-    data["discount_pred_b"] = pd.to_numeric(
-        _series_from_columns(data, ["discount_pred_b", "discount_b"], 0.0), errors="coerce"
-    ).fillna(0.0)
+    data["margin_discount_pct"] = pd.to_numeric(
+        _series_from_columns(data, ["margin_discount_pct"], float(FIXED_MARGIN_DISCOUNT_PCT)),
+        errors="coerce",
+    ).fillna(float(FIXED_MARGIN_DISCOUNT_PCT))
 
     free = _series_from_columns(data, ["free_product", "free_item"], "")
     data["free_product"] = free.astype(str).str.strip().str.lower().replace({"": "product_b"})
@@ -154,12 +153,12 @@ def _build_kpis(df: pd.DataFrame, source_path: Path) -> dict[str, str]:
         return _empty_kpis()
 
     total = len(df)
-    avg_discount = float((df["discount_pred_a"] + df["discount_pred_b"]).mean() / 2.0)
+    avg_discount = float(pd.to_numeric(df.get("margin_discount_pct", float(FIXED_MARGIN_DISCOUNT_PCT)), errors="coerce").mean())
     mtime = datetime.fromtimestamp(source_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M")
 
     return {
         "total_bundles": f"{total:,}",
-        "avg_discount": f"{avg_discount:,.1f}%",
+        "avg_discount": f"{avg_discount:,.1f}% margin",
         "ramadan_pct": "-",
         "triple_bundles": "0",
         "last_output_update": mtime,
@@ -185,9 +184,6 @@ def row_to_record(row: pd.Series) -> dict[str, object]:
 
 def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
     free = str(rec.get("free_product", "product_b")).strip().lower()
-    discount_a = float(pd.to_numeric(rec.get("discount_pred_a", rec.get("discount_a", 0.0)), errors="coerce") or 0.0)
-    discount_b = float(pd.to_numeric(rec.get("discount_pred_b", rec.get("discount_b", 0.0)), errors="coerce") or 0.0)
-
     slots = [
         (
             "product_a",
@@ -195,7 +191,6 @@ def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
             "price_a_sar",
             "price_after_a_sar",
             "purchase_price_a_sar",
-            discount_a,
             "product_a_picture",
         ),
         (
@@ -204,14 +199,13 @@ def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
             "price_b_sar",
             "price_after_b_sar",
             "purchase_price_b_sar",
-            discount_b,
             "product_b_picture",
         ),
     ]
 
     paid: list[dict[str, object]] = []
     free_item: dict[str, object] | None = None
-    for key, name_key, price_key, after_key, purchase_key, disc, pic_key in slots:
+    for key, name_key, price_key, after_key, purchase_key, pic_key in slots:
         name = str(rec.get(name_key, "") or "").strip()
         if not name:
             continue
@@ -223,7 +217,7 @@ def _items_in_order(rec: dict[str, object]) -> list[dict[str, object]]:
             "original_price_sar": str(rec.get(price_key, "0") or "0"),
             "purchase_price_sar": str(rec.get(purchase_key, "0") or "0"),
             "price_after_sar": effective_after,
-            "discount": "100%" if is_free else f"{disc:,.1f}%",
+            "discount": "100%" if is_free else "",
             "is_free": is_free,
             "image_url": str(rec.get(pic_key, "") or "").strip(),
         }
@@ -246,7 +240,7 @@ def _series_from_columns(df: pd.DataFrame, cols: list[str], default: object) -> 
 def _empty_kpis() -> dict[str, str]:
     return {
         "total_bundles": "0",
-        "avg_discount": "0.0%",
+        "avg_discount": "0.0% margin",
         "ramadan_pct": "0.0%",
         "triple_bundles": "0",
         "last_output_update": "-",
