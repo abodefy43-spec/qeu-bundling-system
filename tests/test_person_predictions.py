@@ -49,6 +49,7 @@ from qeu_bundling.presentation.person_predictions import (
     build_manual_profile,
     build_random_profile,
     build_recommendations_for_profiles,
+    get_last_serving_profile_metrics,
 )
 from qeu_bundling.presentation import bundle_semantics as semantics
 
@@ -5283,6 +5284,28 @@ class PersonPredictionsTests(unittest.TestCase):
             return out
 
         self.assertEqual(_pair_layout(recs_a), _pair_layout(recs_b))
+
+    def test_serving_profiling_mode_collects_stage_metrics(self):
+        bundles = _build_bundles()
+        context = _build_context()
+        profile = _mixed_profile("p_serving_profile_metrics")
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            with patch.dict("os.environ", {"QEU_SERVING_PROFILE": "1"}, clear=False):
+                recs = build_recommendations_for_profiles(
+                    bundles_df=bundles,
+                    profiles=[profile],
+                    max_people=1,
+                    row_to_record=lambda row: row.to_dict(),
+                    run_id="run_serving_profile_metrics",
+                )
+        self.assertEqual(len(recs), 1)
+        metrics = get_last_serving_profile_metrics()
+        self.assertTrue(bool(metrics.get("enabled")))
+        self.assertGreaterEqual(int(metrics.get("profile_count", 0)), 1)
+        stage_totals = metrics.get("stage_totals_sec", {})
+        self.assertIn("candidate_generation", stage_totals)
+        self.assertIn("selection_fill", stage_totals)
+        self.assertIn("profile_total", stage_totals)
 
     def test_dashboard_layer_does_not_inject_extra_cleaning_bundle(self):
         from qeu_bundling.presentation.app import _apply_cleaning_display_fallback
