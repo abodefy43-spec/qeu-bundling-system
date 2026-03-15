@@ -132,6 +132,30 @@ def _profile_from_recommendation(
     )
 
 
+def _profiles_from_raw_artifact(raw_path: Path) -> list[PersonProfile]:
+    payload = json.loads(raw_path.read_text(encoding="utf-8"))
+    raw_profiles = payload.get("profiles", [])
+    if not isinstance(raw_profiles, list):
+        return []
+    out: list[PersonProfile] = []
+    for entry in raw_profiles:
+        if not isinstance(entry, dict):
+            continue
+        history_counts_raw = entry.get("history_counts", {})
+        out.append(
+            PersonProfile(
+                profile_id=str(entry.get("profile_id", "")),
+                source=str(entry.get("source", "unknown")),
+                order_ids=[int(x) for x in entry.get("order_ids", []) if int(x) > 0],
+                history_product_ids=[int(x) for x in entry.get("history_product_ids", []) if int(x) > 0],
+                history_items=[str(x) for x in entry.get("history_items", []) if str(x).strip()],
+                created_at=str(entry.get("created_at", "")),
+                history_counts={int(k): int(v) for k, v in dict(history_counts_raw).items()},
+            )
+        )
+    return out
+
+
 def _intent_misclassification_reason(intent: str, name_a: str, name_b: str, lane: str) -> str | None:
     text = f"{name_a} {name_b}".lower()
     lane_norm = str(lane).strip().lower()
@@ -359,8 +383,12 @@ def _comparison_payload(
     if not isinstance(prev_recs, list):
         return {"compare_found": False, "changed_profiles": -1, "missing_profiles": -1}
 
-    def key_for(rec: dict[str, Any]) -> tuple[int, ...]:
-        return tuple(sorted(int(x) for x in rec.get("source_order_ids", [])))
+    def key_for(rec: dict[str, Any]) -> str:
+        profile_id = str(rec.get("profile_id", "")).strip()
+        if profile_id:
+            return f"profile::{profile_id}"
+        order_key = ",".join(str(int(x)) for x in sorted(int(x) for x in rec.get("source_order_ids", [])))
+        return f"orders::{order_key}"
 
     current_by_key = {key_for(rec): rec for rec in current_recommendations if isinstance(rec, dict)}
     previous_by_key = {key_for(rec): rec for rec in prev_recs if isinstance(rec, dict)}
@@ -379,12 +407,13 @@ def _comparison_payload(
         cur_bundle_count = int(len([b for b in cur.get("bundles", []) if isinstance(b, dict)]))
         if prev_bundle_count != cur_bundle_count:
             changed_bundle_count_by_user.append(
-                {
-                    "source_order_ids": list(key),
-                    "before_bundle_count": prev_bundle_count,
-                    "after_bundle_count": cur_bundle_count,
-                }
-            )
+                    {
+                        "key": str(key),
+                        "profile_id": str(cur.get("profile_id", "")),
+                        "before_bundle_count": prev_bundle_count,
+                        "after_bundle_count": cur_bundle_count,
+                    }
+                )
         cur_layout = _bundle_layout(cur)
         prev_layout = _bundle_layout(prev)
         if cur_layout != prev_layout:
@@ -392,7 +421,8 @@ def _comparison_payload(
             if len(changed_examples) < 10:
                 changed_examples.append(
                     {
-                        "source_order_ids": list(key),
+                        "key": str(key),
+                        "profile_id": str(cur.get("profile_id", "")),
                         "before_bundle_count": prev_bundle_count,
                         "after_bundle_count": cur_bundle_count,
                         "previous": prev_layout,
@@ -422,6 +452,12 @@ def _build_parser() -> argparse.ArgumentParser:
         default="",
         help="Optional prior raw JSON artifact to compare against.",
     )
+    parser.add_argument(
+        "--profiles-from-raw",
+        type=str,
+        default="",
+        help="Optional raw JSON artifact to rehydrate the exact profile sample.",
+    )
     return parser
 
 
@@ -440,7 +476,12 @@ def main() -> int:
     bundles_df = view.bundles_df
     order_pool = load_order_pool(base_dir)
     context = load_personalization_context(base_dir)
-    profiles = build_default_profiles(order_pool, count=max(1, int(args.sample_size)), rng=random.Random(int(args.seed)))
+    if str(args.profiles_from_raw).strip():
+        profiles = _profiles_from_raw_artifact(Path(str(args.profiles_from_raw)).resolve())
+        if not profiles:
+            raise SystemExit(f"no profiles found in raw artifact: {args.profiles_from_raw}")
+    else:
+        profiles = build_default_profiles(order_pool, count=max(1, int(args.sample_size)), rng=random.Random(int(args.seed)))
 
     os.environ["QEU_SERVING_PROFILE"] = "1"
     started = time.perf_counter()

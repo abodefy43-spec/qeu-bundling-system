@@ -32,6 +32,7 @@ MAX_TOP_BUNDLE_CANDIDATES_BY_LANE = {"meal": 80, "snack": 140, "occasion": 180, 
 MAX_COPURCHASE_FALLBACK = 80
 MAX_BUNDLES_PER_PERSON = 3
 MAX_CLEANING_BUNDLES_PER_PERSON = 1
+ENABLE_RANDOM_PROFILE_RESAMPLE = False
 EXPOSURE_PAIR_PENALTY = 0.30
 EXPOSURE_TEMPLATE_SIGNATURE_PENALTY = 0.14
 EXPOSURE_FALLBACK_MOTIF_PENALTY = 0.18
@@ -111,7 +112,11 @@ LOW_PREMIUM_STAPLES = frozenset({"rice", "oil", "sugar", "salt", "water", "flour
 MAX_SAME_ANCHOR_PER_PAGE = 2
 TOP10_ANCHOR_SIZE = 18
 MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE = 40
+RESERVE_CURATED_TEMPLATES_PER_LANE = 8
+RESERVE_ANCHOR_POOL_LIMIT_PER_LANE = 36
 NONFOOD_INCLUDE_RATE = 0.20
+CLEANING_INTENT_INCLUDE_THRESHOLD = 0.22
+CLEANING_INTENT_FILL_THRESHOLD = 0.28
 PREMIUM_TOP_N = 5
 FALLBACK_MOTIF_REPEAT_CAP_PER_PERSON = 1
 FALLBACK_EVAP_MOTIF_CAP_PER_PERSON = 2
@@ -138,11 +143,11 @@ BUNDLE_INTENTS = (
 )
 INTENT_ASSIGNMENT_PRECEDENCE = (
     INTENT_CLEANING,
-    INTENT_MEAL_BASE,
-    INTENT_PREPARATION,
-    INTENT_STAPLES,
-    INTENT_DRINK_PAIRING,
     INTENT_DESSERT,
+    INTENT_DRINK_PAIRING,
+    INTENT_PREPARATION,
+    INTENT_MEAL_BASE,
+    INTENT_STAPLES,
     INTENT_SNACK,
 )
 INTENT_PRIOR_WEIGHTS: dict[str, float] = {
@@ -155,10 +160,27 @@ INTENT_PRIOR_WEIGHTS: dict[str, float] = {
     INTENT_CLEANING: 0.07,
 }
 INTENT_PROFILE_PRIOR_STRENGTH = 2.0
+INTENT_HISTORY_RECENCY_BASE = 0.75
+INTENT_HISTORY_RECENCY_SPAN = 0.50
+INTENT_HISTORY_FREQUENCY_POWER = 0.50
 INTENT_BOOST_WEIGHT = 0.10
 INTENT_BOOST_MAX = 0.08
 INTENT_DIVERSITY_MAX_PER_PERSON = 2
 INTENT_DIVERSITY_CONCENTRATION_THRESHOLD = 0.60
+INTENT_ROUTING_DOMINANT_MIN_WEIGHT = 0.24
+INTENT_ROUTING_DOMINANT_MIN_GAP = 0.05
+INTENT_ROUTING_MAX_CANDIDATES = 6
+INTENT_ROUTING_MAX_EARLY_SELECTIONS = 1
+CLEANING_INTENT_ROUTING_THRESHOLD = 0.18
+INTENT_ROUTING_ALLOWED_TOP_INTENTS = frozenset(
+    {
+        INTENT_SNACK,
+        INTENT_DESSERT,
+        INTENT_STAPLES,
+        INTENT_DRINK_PAIRING,
+        INTENT_CLEANING,
+    }
+)
 USE_NEW_BUNDLE_SEMANTICS = str(os.getenv("QEU_USE_NEW_BUNDLE_SEMANTICS", "1")).strip().lower() not in {
     "0",
     "false",
@@ -448,6 +470,37 @@ FINAL_QUALITY_INSTANT_NOODLE_HINTS = frozenset({"indomie", "instant noodle", "cu
 FINAL_QUALITY_DESSERT_HINTS = frozenset(
     {"dessert", "pudding", "custard", "caramel", "cake", "brownie", "sweet", "jelly", "mousse"}
 )
+FINAL_QUALITY_DAIRY_BEVERAGE_HINTS = frozenset(
+    {
+        "milk",
+        "evaporated milk",
+        "condensed milk",
+        "tea milk",
+        "chocolate milk",
+        "yogurt",
+        "yoghurt",
+        "laban",
+        "laban up",
+    }
+)
+FINAL_QUALITY_DESSERT_SNACK_HINTS = frozenset(
+    {
+        "dessert",
+        "pudding",
+        "custard",
+        "caramel",
+        "cake",
+        "brownie",
+        "sweet",
+        "cookie",
+        "cookies",
+        "biscuit",
+        "biscuits",
+        "wafer",
+        "chocolate",
+        "candy",
+    }
+)
 FINAL_QUALITY_CREAM_CHEESE_HINTS = frozenset({"cream cheese", "cheese spread", "kiri", "puck", "triangle cheese", "labneh"})
 FINAL_QUALITY_BISCUIT_PLAIN_HINTS = frozenset({"tea biscuits", "tea biscuit", "marie biscuit", "plain biscuit", "biscuits", "biscuit"})
 FINAL_QUALITY_NUTELLA_HINTS = frozenset({"nutella", "hazelnut spread", "chocolate spread"})
@@ -666,6 +719,20 @@ INTENT_CLEANING_HINTS = frozenset(
         "wipes",
         "brush",
         "tissue",
+    }
+)
+CLEANING_CORE_HINTS = frozenset(
+    {
+        "detergent",
+        "softener",
+        "trash bag",
+        "waste bag",
+        "soap",
+        "dish soap",
+        "disinfectant",
+        "bleach",
+        "cleaner",
+        "toilet cleaner",
     }
 )
 SHOPPER_FAMILY_BASE_ADJUSTMENT: dict[str, float] = {
@@ -2741,6 +2808,79 @@ def _pair_matches_hints(text_a: str, text_b: str, left_hints: frozenset[str], ri
     )
 
 
+def _is_cleaning_core_text(text: str) -> bool:
+    return _text_has_any_hint(text, CLEANING_CORE_HINTS)
+
+
+def _bundle_sanity_reject_reason(
+    anchor: int,
+    complement: int,
+    lane: str,
+    context: PersonalizationContext,
+    *,
+    pair_row: pd.Series | None = None,
+) -> str | None:
+    if int(anchor) <= 0 or int(complement) <= 0 or int(anchor) == int(complement):
+        return "invalid_pair"
+    lane_key = str(lane).strip().lower() or LANE_MEAL
+    if lane_key not in {LANE_MEAL, LANE_SNACK, LANE_OCCASION, LANE_NONFOOD}:
+        lane_key = LANE_MEAL
+
+    a_nonfood = _is_nonfood_product(int(anchor), context, row=pair_row, side="a")
+    b_nonfood = _is_nonfood_product(int(complement), context, row=pair_row, side="b")
+    if a_nonfood != b_nonfood:
+        return "food_cleaning_cross_domain"
+    if lane_key in FOOD_LANE_ORDER and (a_nonfood or b_nonfood):
+        return "food_lane_contains_nonfood"
+    if lane_key == LANE_NONFOOD and not (a_nonfood and b_nonfood):
+        return "nonfood_lane_contains_food"
+
+    a_name = _product_name(int(anchor), context, row=pair_row, side="a")
+    b_name = _product_name(int(complement), context, row=pair_row, side="b")
+    a_cat = _product_category(int(anchor), context, row=pair_row, side="a")
+    b_cat = _product_category(int(complement), context, row=pair_row, side="b")
+    a_family = _product_family(int(anchor), context, row=pair_row, side="a")
+    b_family = _product_family(int(complement), context, row=pair_row, side="b")
+    text_a = semantics.normalize_product_text(a_name, a_cat, a_family)
+    text_b = semantics.normalize_product_text(b_name, b_cat, b_family)
+
+    if a_nonfood and b_nonfood:
+        if _is_cleaning_core_text(text_a) or _is_cleaning_core_text(text_b):
+            return None
+        group_a = _nonfood_group_for_pid(int(anchor), context, row=pair_row, side="a")
+        group_b = _nonfood_group_for_pid(int(complement), context, row=pair_row, side="b")
+        if not group_a or not group_b:
+            return "unknown_nonfood_group"
+        return None
+
+    tuna_a = _text_has_any_hint(text_a, FINAL_QUALITY_TUNA_HINTS)
+    tuna_b = _text_has_any_hint(text_b, FINAL_QUALITY_TUNA_HINTS)
+    dairy_beverage_a = _text_has_any_hint(text_a, FINAL_QUALITY_DAIRY_BEVERAGE_HINTS)
+    dairy_beverage_b = _text_has_any_hint(text_b, FINAL_QUALITY_DAIRY_BEVERAGE_HINTS)
+    dessert_snack_a = _text_has_any_hint(text_a, FINAL_QUALITY_DESSERT_SNACK_HINTS)
+    dessert_snack_b = _text_has_any_hint(text_b, FINAL_QUALITY_DESSERT_SNACK_HINTS)
+    instant_noodle_a = _text_has_any_hint(text_a, FINAL_QUALITY_NOODLE_HINTS | FINAL_QUALITY_INSTANT_NOODLE_HINTS)
+    instant_noodle_b = _text_has_any_hint(text_b, FINAL_QUALITY_NOODLE_HINTS | FINAL_QUALITY_INSTANT_NOODLE_HINTS)
+    bread_like_a = _text_has_any_hint(text_a, HUMAN_HINTS_BREAD | frozenset({"toast", "loaf", "wrap", "tortilla", "pita"}))
+    bread_like_b = _text_has_any_hint(text_b, HUMAN_HINTS_BREAD | frozenset({"toast", "loaf", "wrap", "tortilla", "pita"}))
+
+    if (tuna_a and dairy_beverage_b) or (tuna_b and dairy_beverage_a):
+        return "tuna_dairy_beverage_pair"
+    if (tuna_a and dessert_snack_b) or (tuna_b and dessert_snack_a):
+        return "tuna_dessert_snack_pair"
+    if (instant_noodle_a and dessert_snack_b) or (instant_noodle_b and dessert_snack_a):
+        return "instant_noodles_sweets_pair"
+    if (instant_noodle_a and bread_like_b) or (instant_noodle_b and bread_like_a):
+        return "instant_noodles_bread_pair"
+
+    if _is_cleaning_core_text(text_a) or _is_cleaning_core_text(text_b):
+        return "cleaning_token_in_food_bundle"
+    sem = _semantic_pair_snapshot(int(anchor), int(complement), lane_key, context, pair_row=pair_row)
+    if str(sem.strength) == semantics.STRENGTH_TRASH:
+        return "semantic_trash_pair"
+    return None
+
+
 def _default_intent_profile() -> dict[str, float]:
     priors = {str(intent): float(INTENT_PRIOR_WEIGHTS.get(str(intent), 0.0)) for intent in BUNDLE_INTENTS}
     total = float(sum(max(0.0, value) for value in priors.values()))
@@ -2820,8 +2960,8 @@ def _build_user_intent_profile(profile: PersonProfile, context: PersonalizationC
         family = _product_family(pid, context)
         groups = _group_labels_from_text(name, category, family)
         count = float(max(1.0, float(profile.history_counts.get(int(pid), 1.0))))
-        recency_weight = 0.75 + 0.5 * float((idx + 1.0) / total_items)
-        frequency_weight = math.sqrt(count)
+        recency_weight = float(INTENT_HISTORY_RECENCY_BASE) + float(INTENT_HISTORY_RECENCY_SPAN) * float((idx + 1.0) / total_items)
+        frequency_weight = float(count ** float(INTENT_HISTORY_FREQUENCY_POWER))
         total_weight = float(recency_weight * frequency_weight)
         item_scores = _item_intent_scores(
             name=name,
@@ -2866,94 +3006,90 @@ def _bundle_primary_intent(
     union = set(groups_a) | set(groups_b)
     nonfood_a = _is_nonfood_product(anchor, context, row=pair_row, side="a")
     nonfood_b = _is_nonfood_product(complement, context, row=pair_row, side="b")
-
-    scores = {str(intent): 0.0 for intent in BUNDLE_INTENTS}
-    if lane == LANE_NONFOOD:
-        scores[INTENT_CLEANING] += 2.0
-    elif lane == LANE_SNACK:
-        scores[INTENT_SNACK] += 0.9
-        scores[INTENT_DRINK_PAIRING] += 0.2
-        scores[INTENT_DESSERT] += 0.2
-    elif lane == LANE_OCCASION:
-        scores[INTENT_DRINK_PAIRING] += 0.9
-        scores[INTENT_DESSERT] += 0.5
-    else:
-        scores[INTENT_MEAL_BASE] += 0.8
-        scores[INTENT_PREPARATION] += 0.4
-        scores[INTENT_STAPLES] += 0.3
-
     if lane == LANE_NONFOOD or (nonfood_a and nonfood_b):
-        scores[INTENT_CLEANING] += 3.5
+        return INTENT_CLEANING
 
-    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK):
-        scores[INTENT_DRINK_PAIRING] += 2.2
-    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MILK | HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_BISCUITS):
-        scores[INTENT_DRINK_PAIRING] += 1.8
-        scores[INTENT_SNACK] += 0.8
-    if bool(union & {GROUP_TEA, GROUP_COFFEE, GROUP_MILK, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}) and bool(
-        union & {GROUP_SNACKS, GROUP_CHIPS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CRACKERS}
-    ):
-        scores[INTENT_DRINK_PAIRING] += 1.4
+    has_drink = bool(union & {GROUP_TEA, GROUP_COFFEE, GROUP_MILK, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}) or bool(
+        _text_has_any_hint(text_a, INTENT_DRINK_HINTS) or _text_has_any_hint(text_b, INTENT_DRINK_HINTS)
+    )
+    has_snack = bool(union & {GROUP_SNACKS, GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS}) or bool(
+        _text_has_any_hint(text_a, INTENT_SNACK_HINTS) or _text_has_any_hint(text_b, INTENT_SNACK_HINTS)
+    )
+    has_dessert = bool(union & {GROUP_SWEETS, GROUP_DATES, GROUP_CREAM, GROUP_CHOCOLATE, GROUP_COOKIES, GROUP_CANDY}) or bool(
+        _text_has_any_hint(text_a, INTENT_DESSERT_HINTS) or _text_has_any_hint(text_b, INTENT_DESSERT_HINTS)
+    )
+    has_helper = bool(_text_has_any_hint(text_a, INTENT_PREPARATION_HINTS) or _text_has_any_hint(text_b, INTENT_PREPARATION_HINTS))
+    has_protein = bool(union & {GROUP_PROTEIN}) or bool(
+        _text_has_any_hint(text_a, HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS)
+        or _text_has_any_hint(text_b, HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS)
+    )
+    has_starch = bool(union & {GROUP_RICE_GRAINS, GROUP_BREAD_CARB, GROUP_NOODLES_PASTA}) or bool(
+        _text_has_any_hint(text_a, HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodle", "noodles"}))
+        or _text_has_any_hint(text_b, HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodle", "noodles"}))
+    )
+    staple_a = _text_has_any_hint(text_a, INTENT_STAPLE_HINTS)
+    staple_b = _text_has_any_hint(text_b, INTENT_STAPLE_HINTS)
 
+    # 1) Dessert-first rule for clearly sweet/dessert structure.
     if _pair_matches_hints(text_a, text_b, FINAL_QUALITY_DESSERT_HINTS | HUMAN_HINTS_CONDENSED_MILK, HUMAN_HINTS_CREAM_TOKEN | HUMAN_HINTS_MILK):
-        scores[INTENT_DESSERT] += 2.0
-    if _text_has_any_hint(text_a, INTENT_DESSERT_HINTS) and _text_has_any_hint(text_b, INTENT_DESSERT_HINTS):
-        scores[INTENT_DESSERT] += 1.6
-    if bool(union & {GROUP_SWEETS, GROUP_DATES, GROUP_CREAM, GROUP_CHOCOLATE, GROUP_COOKIES, GROUP_CANDY}):
-        scores[INTENT_DESSERT] += 0.8
+        return INTENT_DESSERT
+    if has_dessert and (bool(_text_has_any_hint(text_a, INTENT_DESSERT_HINTS) and _text_has_any_hint(text_b, INTENT_DESSERT_HINTS))):
+        return INTENT_DESSERT
+    if lane == LANE_OCCASION and has_dessert and bool(has_drink or (union & {GROUP_CREAM, GROUP_MILK, GROUP_DAIRY})):
+        return INTENT_DESSERT
 
-    if _text_has_any_hint(text_a, INTENT_SNACK_HINTS) and _text_has_any_hint(text_b, INTENT_SNACK_HINTS):
-        scores[INTENT_SNACK] += 1.9
-    if bool(union & {GROUP_SNACKS, GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS}):
-        scores[INTENT_SNACK] += 1.0
+    # 2) Drink pairing beats snack when drink structure is present.
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK):
+        return INTENT_DRINK_PAIRING
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MILK | HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_BISCUITS):
+        return INTENT_DRINK_PAIRING
+    if has_drink and (has_snack or has_dessert):
+        return INTENT_DRINK_PAIRING
+    if lane == LANE_OCCASION and has_drink:
+        return INTENT_DRINK_PAIRING
 
+    # 3) Preparation beats meal_base when one side is helper/condiment.
     if _pair_matches_hints(
         text_a,
         text_b,
         FINAL_QUALITY_TUNA_HINTS | HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS,
         HUMAN_HINTS_SAUCE | MOTIF_HINTS_TOMATO_BASE | HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD | HUMAN_HINTS_STOCK,
     ):
-        scores[INTENT_PREPARATION] += 1.9
-    if _text_has_any_hint(text_a, INTENT_PREPARATION_HINTS) or _text_has_any_hint(text_b, INTENT_PREPARATION_HINTS):
-        scores[INTENT_PREPARATION] += 0.7
+        return INTENT_PREPARATION
+    if has_protein and has_helper:
+        return INTENT_PREPARATION
 
+    # 4) Meal base beats staples when a meal-core structure exists.
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        return INTENT_STAPLES
     if _pair_matches_hints(
         text_a,
         text_b,
         HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS,
-        HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodles", "noodle"}),
+        HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodle", "noodles"}),
     ):
-        scores[INTENT_MEAL_BASE] += 2.0
-    if bool(union & {GROUP_PROTEIN}) and bool(union & {GROUP_RICE_GRAINS, GROUP_BREAD_CARB, GROUP_NOODLES_PASTA}):
-        scores[INTENT_MEAL_BASE] += 1.2
-
-    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
-        scores[INTENT_STAPLES] += 2.3
-    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE | HUMAN_HINTS_EGGS, HUMAN_HINTS_RICE | HUMAN_HINTS_EGGS | FINAL_QUALITY_TUNA_HINTS):
-        scores[INTENT_STAPLES] += 1.4
-    if _text_has_any_hint(text_a, INTENT_STAPLE_HINTS) and _text_has_any_hint(text_b, INTENT_STAPLE_HINTS):
-        scores[INTENT_STAPLES] += 1.3
-    if _text_has_any_hint(text_a, INTENT_STAPLE_HINTS) or _text_has_any_hint(text_b, INTENT_STAPLE_HINTS):
-        scores[INTENT_STAPLES] += 0.5
-
-    ranked = sorted(
-        BUNDLE_INTENTS,
-        key=lambda intent: (
-            -float(scores.get(intent, 0.0)),
-            INTENT_ASSIGNMENT_PRECEDENCE.index(intent),
-            BUNDLE_INTENTS.index(intent),
-        ),
-    )
-    top = str(ranked[0])
-    if float(scores.get(top, 0.0)) <= 0.0:
-        if lane == LANE_NONFOOD:
-            return INTENT_CLEANING
-        if lane == LANE_SNACK:
-            return INTENT_SNACK
-        if lane == LANE_OCCASION:
-            return INTENT_DRINK_PAIRING
         return INTENT_MEAL_BASE
-    return top
+    if has_protein and has_starch:
+        return INTENT_MEAL_BASE
+    if lane == LANE_MEAL and has_protein and bool(union & {GROUP_PRODUCE, GROUP_SPICES}):
+        return INTENT_MEAL_BASE
+
+    # 5) Staples.
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        return INTENT_STAPLES
+    if staple_a and staple_b:
+        return INTENT_STAPLES
+    if (staple_a or staple_b) and lane == LANE_MEAL:
+        return INTENT_STAPLES
+
+    # 6) Snack fallback.
+    if lane == LANE_SNACK:
+        return INTENT_SNACK
+    if has_snack:
+        return INTENT_SNACK
+    if lane == LANE_OCCASION:
+        return INTENT_DRINK_PAIRING
+    return INTENT_MEAL_BASE
 
 
 def _intent_profile_boost(intent: str, user_intent_profile: dict[str, float]) -> float:
@@ -3855,7 +3991,7 @@ def _semantic_lane_compatible(
     if lane != LANE_NONFOOD and (a_is_nonfood or b_is_nonfood):
         return False
     if lane == LANE_NONFOOD:
-        return bool(a_is_nonfood and b_is_nonfood and sem_a == sem_b)
+        return bool(a_is_nonfood and b_is_nonfood)
 
     if SEM_DESSERT in sem_pair and sem_pair & SAVORY_SEMANTIC_GROUPS:
         return False
@@ -4480,6 +4616,13 @@ def _nonfood_pair_close_enough(
     fam_b_norm = _normalise_text(family_b)
     if fam_a_norm and fam_b_norm and fam_a_norm == fam_b_norm:
         return True
+    core_a = _is_cleaning_core_text(f"{group_a} {cat_a_norm} {fam_a_norm}")
+    core_b = _is_cleaning_core_text(f"{group_b} {cat_b_norm} {fam_b_norm}")
+    if core_a or core_b:
+        return True
+    allowed_nonfood_groups = {"cleaning", "tissue", "other", "body", "hair"}
+    if group_a and group_b and {str(group_a), str(group_b)} <= allowed_nonfood_groups:
+        return True
     return False
 
 
@@ -4952,10 +5095,19 @@ def _passes_complement_gate(
     if lane == LANE_NONFOOD:
         if not (anchor_nonfood and comp_nonfood):
             return False
+        sanity_reject = _bundle_sanity_reject_reason(int(anchor), int(complement), lane, context, pair_row=pair_row)
+        if sanity_reject:
+            return False
         group_a = _nonfood_group_for_pid(int(anchor), context, row=pair_row, side="a")
         group_b = _nonfood_group_for_pid(int(complement), context, row=pair_row, side="b")
         if not group_a or not group_b:
             return False
+        anchor_text = semantics.normalize_product_text(anchor_name, anchor_cat, anchor_family)
+        comp_text = semantics.normalize_product_text(comp_name, comp_cat, comp_family)
+        if _is_cleaning_core_text(anchor_text) or _is_cleaning_core_text(comp_text):
+            return True
+        if {str(group_a), str(group_b)} <= {"cleaning", "tissue", "other", "body", "hair"}:
+            return True
         return bool(group_a == group_b)
 
     if pair.anchor_packaging:
@@ -5133,22 +5285,35 @@ def _passes_pair_filters(
         return False
     if USE_NEW_BUNDLE_SEMANTICS:
         sem = pair.semantic
-        if sem.hard_invalid:
-            return False
-        if STRICT_SEMANTIC_FILTERING and not sem.lane_allowed:
-            return False
-        if str(sem.strength) == semantics.STRENGTH_TRASH:
-            return False
-        if not pair.visible_ok:
-            return False
-        if lane == LANE_SNACK:
-            if _snack_pattern_key(pair.anchor_groups, pair.complement_groups) is None:
-                return False
         if _is_food_lane(lane):
+            if sem.hard_invalid:
+                return False
+            if STRICT_SEMANTIC_FILTERING and not sem.lane_allowed:
+                return False
+            if str(sem.strength) == semantics.STRENGTH_TRASH:
+                return False
+            if not pair.visible_ok:
+                return False
+            if lane == LANE_SNACK and _snack_pattern_key(pair.anchor_groups, pair.complement_groups) is None:
+                return False
             return True
         group_a = _nonfood_group_for_pid(anchor, context, row=pair_row, side="a")
         group_b = _nonfood_group_for_pid(complement, context, row=pair_row, side="b")
-        return bool(group_a and group_b and group_a == group_b)
+        if not group_a or not group_b:
+            return False
+        sanity_reject = _bundle_sanity_reject_reason(int(anchor), int(complement), lane, context, pair_row=pair_row)
+        if sanity_reject:
+            return False
+        return bool(
+            _nonfood_pair_close_enough(
+                str(group_a),
+                str(group_b),
+                pair.anchor_category,
+                pair.complement_category,
+                pair.anchor_family,
+                pair.complement_family,
+            )
+        )
     feedback_override = _feedback_pair_override(int(anchor), int(complement))
     if feedback_override and _is_food_lane(lane):
         return True
@@ -5792,11 +5957,14 @@ def _fallback_candidates_for_lane(
     context: PersonalizationContext,
     top_bundle_rows_by_anchor: dict[int, list[pd.Series]],
     bundle_lookup: dict[tuple[int, int], pd.Series],
+    *,
+    template_limit: int | None = None,
 ) -> list[tuple[int, int, pd.Series | None, str]]:
     lane_name = str(lane).strip().lower()
     templates = _curated_entries_for_lane(lane_name)
     if lane_name in FOOD_LANE_ORDER:
-        templates = templates[:MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE]
+        limit = int(template_limit) if template_limit is not None else int(MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE)
+        templates = templates[: max(1, limit)]
     if not templates:
         return []
 
@@ -5869,6 +6037,10 @@ def _fallback_candidates_for_lane(
             return bool(cached)
         analysis = _pair_analysis(int(anchor), int(complement), lane_name, context, pair_row=row)
         if lane_name in FOOD_LANE_ORDER and not _anchor_allowed_for_lane(int(anchor), lane_name, context, row=row):
+            pair_pass_cache[key] = False
+            return False
+        sanity_reject = _bundle_sanity_reject_reason(int(anchor), int(complement), lane_name, context, pair_row=row)
+        if sanity_reject:
             pair_pass_cache[key] = False
             return False
         if not _passes_pair_filters(
@@ -6377,6 +6549,37 @@ def _candidate_is_strong_finalist(candidate: dict[str, object]) -> bool:
 
 
 def _candidate_is_fill_finalist(candidate: dict[str, object]) -> bool:
+    lane = str(candidate.get("lane", "")).strip().lower()
+    if lane == LANE_NONFOOD:
+        return True
+    strength = str(candidate.get("pair_strength", "")).strip()
+    cp_score = float(candidate.get("cp_score", 0.0))
+    pair_count = int(_safe_int(candidate.get("pair_count"), default=0))
+    lane_fit = float(candidate.get("lane_fit_score", 0.0))
+    template_strength = float(candidate.get("template_strength", 0.0))
+    category_strength = float(candidate.get("category_strength", 0.0))
+    prior_bonus = float(candidate.get("prior_bonus", 0.0))
+
+    if strength == semantics.STRENGTH_TRASH:
+        return False
+    if lane == LANE_MEAL:
+        return bool(strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE} and cp_score >= 16.0 and pair_count >= 5)
+    if lane == LANE_SNACK:
+        return bool(
+            strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE}
+            and cp_score >= 18.0
+            and pair_count >= 6
+            and lane_fit >= 0.60
+            and (template_strength >= 0.65 or category_strength >= 0.65)
+        )
+    if lane == LANE_OCCASION:
+        return bool(
+            strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE}
+            and cp_score >= 20.0
+            and pair_count >= 6
+            and lane_fit >= 0.70
+            and (template_strength >= 0.65 or prior_bonus > 0.0)
+        )
     return _candidate_is_strong_finalist(candidate)
 
 
@@ -7053,7 +7256,7 @@ def build_recommendations_for_profiles(
         profile_seed_key = _profile_seed_key(profile)
         profile_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=rng_salt)
         nonfood_gate_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=f"{rng_salt or ''}::nonfood_gate")
-        include_nonfood = bool(nonfood_gate_rng.random() < NONFOOD_INCLUDE_RATE)
+        include_nonfood_default = bool(nonfood_gate_rng.random() < NONFOOD_INCLUDE_RATE)
         lane_ranked = _rank_anchors_by_lane(profile, context, profile_rng, active_base_dir)
         seed_anchors = _pick_three_lane_anchors(lane_ranked, profile_rng) or {}
 
@@ -7128,6 +7331,9 @@ def build_recommendations_for_profiles(
             fam_b = str(context.product_family_by_id.get(b_id, "")).strip().lower()
             a_nonfood = _is_nonfood_product(a_id, context)
             b_nonfood = _is_nonfood_product(b_id, context)
+            sanity_reject = _bundle_sanity_reject_reason(a_id, b_id, lane_name, context)
+            if sanity_reject:
+                return None, local_dup_counter
             if lane_name in FOOD_LANE_ORDER and (a_nonfood or b_nonfood):
                 return None, local_dup_counter
             if lane_name == LANE_NONFOOD and not (a_nonfood and b_nonfood):
@@ -7275,17 +7481,62 @@ def build_recommendations_for_profiles(
         profile_shopper_family_interest = _profile_shopper_family_interest(profile, context)
         user_intent_profile = _build_user_intent_profile(profile, context)
         user_top_intent, user_top_intent_weight = _top_intent(user_intent_profile)
+        cleaning_intent_weight = float(user_intent_profile.get(INTENT_CLEANING, 0.0))
+        sorted_intent_weights = sorted(
+            ((str(intent), float(user_intent_profile.get(str(intent), 0.0))) for intent in BUNDLE_INTENTS),
+            key=lambda item: (-float(item[1]), str(item[0])),
+        )
+        second_intent_weight = float(sorted_intent_weights[1][1]) if len(sorted_intent_weights) > 1 else 0.0
+        top_intent_gap = float(max(0.0, float(user_top_intent_weight) - float(second_intent_weight)))
+        dominant_intent_routing = bool(
+            str(user_top_intent) in (INTENT_ROUTING_ALLOWED_TOP_INTENTS - {INTENT_CLEANING})
+            and float(user_top_intent_weight) >= float(INTENT_ROUTING_DOMINANT_MIN_WEIGHT)
+            and float(top_intent_gap) >= float(INTENT_ROUTING_DOMINANT_MIN_GAP)
+        )
+        cleaning_intent_routing = bool(
+            str(user_top_intent) == INTENT_CLEANING
+            and float(cleaning_intent_weight) >= float(CLEANING_INTENT_ROUTING_THRESHOLD)
+        )
+        intent_routing_enabled = bool(
+            str(user_top_intent) in INTENT_ROUTING_ALLOWED_TOP_INTENTS and (dominant_intent_routing or cleaning_intent_routing)
+        )
+        allow_cleaning_intent_fill = bool(
+            float(cleaning_intent_weight) >= float(CLEANING_INTENT_FILL_THRESHOLD) or cleaning_intent_routing
+        )
+        include_nonfood = bool(
+            include_nonfood_default
+            or float(cleaning_intent_weight) >= float(CLEANING_INTENT_INCLUDE_THRESHOLD)
+            or cleaning_intent_routing
+        )
+        if include_nonfood and LANE_NONFOOD not in candidate_lanes:
+            candidate_lanes.append(LANE_NONFOOD)
         candidate_pool: dict[tuple[str, int, int, str], dict[str, object]] = {}
         local_duplicate_blocked = 0
         candidate_started = time.perf_counter()
 
-        def _register_candidate(lane_name: str, choice: dict[str, object], score_value: float) -> None:
+        def _register_candidate(
+            lane_name: str,
+            choice: dict[str, object],
+            score_value: float,
+            *,
+            enforce_fallback_quality: bool = True,
+        ) -> None:
             anchor_id = int(_safe_int(choice.get("anchor"), default=-1))
             complement_id = int(_safe_int(choice.get("complement"), default=-1))
             if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
                 return
             row = choice.get("bundle_row")
             pair_row = row if isinstance(row, pd.Series) else None
+            sanity_reject = _bundle_sanity_reject_reason(
+                anchor_id,
+                complement_id,
+                str(lane_name),
+                context,
+                pair_row=pair_row,
+            )
+            if sanity_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_sanity")
+                return
             final_quality_reject = _final_human_quality_reject_reason(
                 anchor_id,
                 complement_id,
@@ -7323,10 +7574,11 @@ def build_recommendations_for_profiles(
             candidate["motif_family_signature"] = _candidate_motif_family_signature(candidate, context)
             candidate["family_pattern_signature"] = _candidate_family_pattern_signature(candidate, context)
             candidate["bundle_shape_signature"] = _candidate_bundle_shape_signature(candidate, context)
-            fallback_quality_reject = _fallback_quality_reject_reason(candidate, context)
-            if fallback_quality_reject:
-                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_quality")
-                return
+            if enforce_fallback_quality:
+                fallback_quality_reject = _fallback_quality_reject_reason(candidate, context)
+                if fallback_quality_reject:
+                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_quality")
+                    return
             candidate["fallback_motif_key"] = _controlled_fallback_motif_key(candidate, context)
             existing = candidate_pool.get(key)
             if existing is None or float(candidate["pool_score"]) > float(existing.get("pool_score", -1e9)):
@@ -7409,10 +7661,22 @@ def build_recommendations_for_profiles(
         cleaning_count = 0
         selected_fallback_motif_counts: dict[str, int] = {}
         selected_intent_counts: dict[str, int] = {}
+        intent_lane_weight: dict[str, float] = {
+            LANE_MEAL: float(user_intent_profile.get(INTENT_MEAL_BASE, 0.0))
+            + float(user_intent_profile.get(INTENT_PREPARATION, 0.0))
+            + float(user_intent_profile.get(INTENT_STAPLES, 0.0)),
+            LANE_SNACK: float(user_intent_profile.get(INTENT_SNACK, 0.0)) + 0.35 * float(user_intent_profile.get(INTENT_DRINK_PAIRING, 0.0)),
+            LANE_OCCASION: float(user_intent_profile.get(INTENT_DESSERT, 0.0)) + float(user_intent_profile.get(INTENT_DRINK_PAIRING, 0.0)),
+            LANE_NONFOOD: float(user_intent_profile.get(INTENT_CLEANING, 0.0)),
+        }
+        lane_fill_order = sorted(
+            ALL_LANE_ORDER,
+            key=lambda lane_name: (-float(intent_lane_weight.get(lane_name, 0.0)), ALL_LANE_ORDER.index(lane_name)),
+        )
 
         scoring_started = time.perf_counter()
-        enriched_candidates: list[dict[str, object]] = []
-        for candidate in ordered_candidates:
+        
+        def _enrich_candidate_for_ranking(candidate: dict[str, object]) -> dict[str, object]:
             enriched = dict(candidate)
             effective_score = _candidate_effective_score(
                 enriched,
@@ -7434,7 +7698,9 @@ def build_recommendations_for_profiles(
             enriched["family_exposure_count"] = int(family_exposure_count)
             # Explicit close-score preference: when candidates are similarly strong, prefer rarer motif families.
             enriched["effective_score_rank"] = float(effective_score) - float(family_rank_penalty)
-            enriched_candidates.append(enriched)
+            return enriched
+
+        enriched_candidates: list[dict[str, object]] = [_enrich_candidate_for_ranking(candidate) for candidate in ordered_candidates]
 
         strong_food_candidates = [
             cand
@@ -7511,6 +7777,74 @@ def build_recommendations_for_profiles(
                 int(_safe_int(cand.get("anchor"), default=-1)),
             )
         )
+        fallback_fill_candidates = [
+            cand
+            for cand in enriched_candidates
+            if _source_group_from_source(str(cand.get("source", ""))) in {"fallback_food", "fallback_cleaning"}
+            and _candidate_is_fill_finalist(cand)
+        ]
+        fallback_fill_candidates.sort(
+            key=lambda cand: (
+                -float(user_intent_profile.get(str(cand.get("primary_intent", "")).strip().lower(), 0.0)),
+                int(lane_fill_order.index(str(cand.get("lane", "")).strip().lower()))
+                if str(cand.get("lane", "")).strip().lower() in lane_fill_order
+                else len(lane_fill_order),
+                -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                _source_priority_rank(str(cand.get("source", ""))),
+                int(_safe_int(cand.get("complement"), default=-1)),
+                int(_safe_int(cand.get("anchor"), default=-1)),
+            )
+        )
+        intent_priority_candidates: list[dict[str, object]] = []
+        if intent_routing_enabled and str(user_top_intent) in BUNDLE_INTENTS:
+            top_intent_key = str(user_top_intent)
+            for candidate in enriched_candidates:
+                intent_key = str(candidate.get("primary_intent", "")).strip().lower()
+                if intent_key not in BUNDLE_INTENTS:
+                    intent_key = _bundle_primary_intent(candidate, context, lane_hint=str(candidate.get("lane", "")))
+                    candidate["primary_intent"] = intent_key
+                if intent_key != top_intent_key:
+                    continue
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                if top_intent_key == INTENT_CLEANING:
+                    if not is_cleaning_candidate:
+                        continue
+                    if not _candidate_is_fill_finalist(candidate):
+                        continue
+                else:
+                    if is_cleaning_candidate:
+                        continue
+                    if not (_candidate_is_strong_finalist(candidate) or _candidate_is_fill_finalist(candidate)):
+                        continue
+                intent_priority_candidates.append(candidate)
+            intent_priority_candidates.sort(
+                key=lambda cand: (
+                    -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                    _source_priority_rank(str(cand.get("source", ""))),
+                    int(_safe_int(cand.get("pair_count"), default=0)) * -1,
+                    int(_safe_int(cand.get("complement"), default=-1)),
+                    int(_safe_int(cand.get("anchor"), default=-1)),
+                )
+            )
+            intent_priority_candidates = intent_priority_candidates[: int(max(1, INTENT_ROUTING_MAX_CANDIDATES))]
+        food_selection_candidates = list(food_candidates)
+        if dominant_intent_routing and str(user_top_intent) != INTENT_CLEANING and intent_priority_candidates:
+            merged_candidates: list[dict[str, object]] = []
+            seen_keys: set[tuple[str, int, int, str]] = set()
+            priority_food_candidates = [cand for cand in intent_priority_candidates if not _is_household_bundle(cand, context)]
+            for candidate in list(priority_food_candidates) + list(food_candidates):
+                lane_key = str(candidate.get("lane", "")).strip().lower()
+                candidate_key = (
+                    lane_key,
+                    int(_safe_int(candidate.get("anchor"), default=-1)),
+                    int(_safe_int(candidate.get("complement"), default=-1)),
+                    str(candidate.get("source", "")),
+                )
+                if candidate_key in seen_keys:
+                    continue
+                seen_keys.add(candidate_key)
+                merged_candidates.append(candidate)
+            food_selection_candidates = merged_candidates
         profiling.add_stage("scoring_ranking", time.perf_counter() - scoring_started)
 
         def _try_select(candidate: dict[str, object], *, allow_cleaning: bool, intent_cap_override: bool = False) -> bool:
@@ -7522,6 +7856,16 @@ def build_recommendations_for_profiles(
             lane_name = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
             row = candidate.get("bundle_row")
             pair_row = row if isinstance(row, pd.Series) else None
+            sanity_reject = _bundle_sanity_reject_reason(
+                anchor_id,
+                complement_id,
+                lane_name,
+                context,
+                pair_row=pair_row,
+            )
+            if sanity_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_sanity")
+                return False
             final_quality_reject = _final_human_quality_reject_reason(
                 anchor_id,
                 complement_id,
@@ -7555,7 +7899,7 @@ def build_recommendations_for_profiles(
             is_cleaning = _is_household_bundle(candidate, context)
             if is_cleaning and not allow_cleaning:
                 return False
-            if is_cleaning and cleaning_count >= MAX_CLEANING_BUNDLES_PER_PERSON:
+            if is_cleaning and cleaning_count >= MAX_CLEANING_BUNDLES_PER_PERSON and not intent_cap_override:
                 return False
             source_group = _source_group_from_source(str(candidate.get("source", "")))
             fallback_motif = str(candidate.get("fallback_motif_key", "")).strip()
@@ -7586,6 +7930,25 @@ def build_recommendations_for_profiles(
             return True
 
         selection_started = time.perf_counter()
+        if (
+            len(selected_choices) < MAX_BUNDLES_PER_PERSON
+            and cleaning_intent_routing
+            and str(user_top_intent) == INTENT_CLEANING
+            and intent_priority_candidates
+        ):
+            routed_count = 0
+            for candidate in intent_priority_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                allow_cleaning_candidate = bool(is_cleaning_candidate and allow_cleaning_intent_fill)
+                if is_cleaning_candidate and not allow_cleaning_candidate:
+                    continue
+                if _try_select(candidate, allow_cleaning=allow_cleaning_candidate):
+                    routed_count += 1
+                if (
+                    routed_count >= int(max(1, INTENT_ROUTING_MAX_EARLY_SELECTIONS))
+                    or len(selected_choices) >= MAX_BUNDLES_PER_PERSON
+                ):
+                    break
         # Mild lane-balance nudge: if a strong non-meal option is close in score, take one early.
         if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
             top_meal_score = max(
@@ -7611,13 +7974,152 @@ def build_recommendations_for_profiles(
                 if _try_select(candidate, allow_cleaning=False):
                     break
 
-        for candidate in food_candidates:
+        for candidate in food_selection_candidates:
             if _try_select(candidate, allow_cleaning=False) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
                 break
 
         if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
-            for candidate in food_candidates:
+            for candidate in food_selection_candidates:
                 if _try_select(candidate, allow_cleaning=False, intent_cap_override=True) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            allow_cleaning_tier2 = bool(allow_cleaning_intent_fill)
+            for candidate in fallback_fill_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                if _try_select(
+                    candidate,
+                    allow_cleaning=bool(allow_cleaning_tier2 and is_cleaning_candidate),
+                ) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            allow_cleaning_tier2 = bool(allow_cleaning_intent_fill)
+            for candidate in fallback_fill_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                if _try_select(
+                    candidate,
+                    allow_cleaning=bool(allow_cleaning_tier2 and is_cleaning_candidate),
+                    intent_cap_override=True,
+                ) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        def _build_reserve_fill_candidates() -> list[dict[str, object]]:
+            nonlocal local_duplicate_blocked
+            existing_keys = set(candidate_pool.keys())
+            for lane_name in lane_fill_order:
+                reserve_history_ids: set[int] = set()
+                if lane_name == LANE_NONFOOD:
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in profile.history_product_ids
+                        if int(pid) > 0 and _is_nonfood_product(int(pid), context)
+                    )
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in lane_candidate_ids.get(LANE_NONFOOD, ())[:RESERVE_ANCHOR_POOL_LIMIT_PER_LANE]
+                        if int(pid) > 0
+                    )
+                    if len(reserve_history_ids) < RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                        for pid in context.non_food_ids:
+                            pid_int = int(pid)
+                            if pid_int <= 0:
+                                continue
+                            reserve_history_ids.add(pid_int)
+                            if len(reserve_history_ids) >= RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                                break
+                else:
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in profile.history_product_ids
+                        if int(pid) > 0 and _anchor_allowed_for_lane(int(pid), lane_name, context)
+                    )
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in lane_candidate_ids.get(lane_name, ())[:RESERVE_ANCHOR_POOL_LIMIT_PER_LANE]
+                        if int(pid) > 0 and _anchor_allowed_for_lane(int(pid), lane_name, context)
+                    )
+                    if len(reserve_history_ids) < RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                        for pid in top_bundle_rows_by_anchor.keys():
+                            pid_int = int(pid)
+                            if pid_int <= 0 or not _anchor_allowed_for_lane(pid_int, lane_name, context):
+                                continue
+                            reserve_history_ids.add(pid_int)
+                            if len(reserve_history_ids) >= RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                                break
+                if not reserve_history_ids:
+                    continue
+                for fallback_anchor, fallback_complement, _fallback_row, fallback_source in _fallback_candidates_for_lane(
+                    reserve_history_ids,
+                    lane_name,
+                    context,
+                    top_bundle_rows_by_anchor,
+                    bundle_lookup,
+                    template_limit=RESERVE_CURATED_TEMPLATES_PER_LANE,
+                ):
+                    choice, _choice_key, personal_score, duplicate_blocked = _pick_candidate_for_anchor(
+                        profile=profile,
+                        anchor=int(fallback_anchor),
+                        lane=lane_name,
+                        context=context,
+                        top_bundle_rows_by_anchor=top_bundle_rows_by_anchor,
+                        bundle_lookup=bundle_lookup,
+                        used_pair_keys=set(),
+                        feedback_lookup=feedback_lookup,
+                        rng=profile_rng,
+                        used_complements=set(),
+                        used_complement_families={},
+                        global_anchor_lane_counts=global_anchor_lane_counts,
+                        global_anchor_counts=global_anchor_counts,
+                        reject_counters=gate_reject_counters,
+                        allow_anchor_overflow=True,
+                        allowed_complements={int(fallback_complement)},
+                        serving_telemetry=serving_telemetry,
+                    )
+                    local_duplicate_blocked += int(duplicate_blocked)
+                    if choice is None:
+                        continue
+                    choice["source"] = str(fallback_source)
+                    _register_candidate(
+                        lane_name,
+                        choice,
+                        float(personal_score) - 0.05,
+                        enforce_fallback_quality=False,
+                    )
+
+            reserve_candidates: list[dict[str, object]] = []
+            for key, candidate in candidate_pool.items():
+                if key in existing_keys:
+                    continue
+                reserve_candidates.append(_enrich_candidate_for_ranking(candidate))
+            reserve_candidates.sort(
+                key=lambda cand: (
+                    -float(user_intent_profile.get(str(cand.get("primary_intent", "")).strip().lower(), 0.0)),
+                    int(lane_fill_order.index(str(cand.get("lane", "")).strip().lower()))
+                    if str(cand.get("lane", "")).strip().lower() in lane_fill_order
+                    else len(lane_fill_order),
+                    -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                    _source_priority_rank(str(cand.get("source", ""))),
+                    int(_safe_int(cand.get("complement"), default=-1)),
+                    int(_safe_int(cand.get("anchor"), default=-1)),
+                )
+            )
+            return reserve_candidates
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            reserve_fill_candidates = _build_reserve_fill_candidates()
+            for candidate in reserve_fill_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                allow_cleaning_candidate = bool(
+                    not is_cleaning_candidate
+                    or allow_cleaning_intent_fill
+                    or len(selected_choices) <= 1
+                )
+                if _try_select(
+                    candidate,
+                    allow_cleaning=allow_cleaning_candidate,
+                    intent_cap_override=True,
+                ) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
                     break
 
         if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
@@ -7684,7 +8186,7 @@ def build_recommendations_for_profiles(
                 )
             )
             for candidate in cleaning_candidates:
-                if _try_select(candidate, allow_cleaning=True):
+                if _try_select(candidate, allow_cleaning=True, intent_cap_override=True) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
                     break
 
         profiling.add_stage("selection_fill", time.perf_counter() - selection_started)
@@ -7731,7 +8233,11 @@ def build_recommendations_for_profiles(
         profiling.add_stage("output_assembly", time.perf_counter() - finalize_started)
         bundles_for_person = bundles_for_person[:MAX_BUNDLES_PER_PERSON]
 
-        if len(bundles_for_person) < MAX_BUNDLES_PER_PERSON and str(profile.source).strip().lower() == "random":
+        if (
+            ENABLE_RANDOM_PROFILE_RESAMPLE
+            and len(bundles_for_person) < MAX_BUNDLES_PER_PERSON
+            and str(profile.source).strip().lower() == "random"
+        ):
             replaced = False
             _record_serving_telemetry(serving_telemetry, "global", "resample_attempted")
             while resample_budget > 0 and not replaced:

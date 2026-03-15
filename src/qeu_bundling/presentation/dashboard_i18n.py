@@ -274,7 +274,7 @@ def dashboard_ui_text_ar() -> dict[str, object]:
         "lane_snack_en": "SNACK",
         "lane_occasion_ar": "مناسبة",
         "lane_occasion_en": "OCCASION",
-        "lane_nonfood_ar": `غير غذائي",
+        "lane_nonfood_ar": "غير غذائي",
         "lane_nonfood_en": "NONFOOD",
         "main_product_ar": "المنتج الرئيسي",
         "main_product_en": "Main Product",
