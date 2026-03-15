@@ -20,11 +20,6 @@ import pandas as pd
 
 from qeu_bundling.config.paths import get_paths
 from qeu_bundling.core.feedback_memory import build_pair_multiplier_lookup, pair_feedback_multiplier
-from qeu_bundling.core.pricing import (
-    FIXED_MARGIN_DISCOUNT_PCT,
-    margin_discounted_sale_price,
-    price_paid_and_free_items_fixed_margin,
-)
 from qeu_bundling.presentation import bundle_semantics as semantics
 from qeu_bundling.review.feedback_loader import build_feedback_lookup, load_bundle_feedback
 
@@ -36,10 +31,9 @@ MAX_TOP_BUNDLE_CANDIDATES = 80
 MAX_TOP_BUNDLE_CANDIDATES_BY_LANE = {"meal": 80, "snack": 140, "occasion": 180, "nonfood": 80}
 MAX_COPURCHASE_FALLBACK = 80
 MAX_BUNDLES_PER_PERSON = 3
-PERSONALIZED_TARGET_BUNDLES = 2
-PERSONALIZED_OPTIONAL_THIRD_MIN_SCORE = 1.10
 MAX_CLEANING_BUNDLES_PER_PERSON = 1
-EXPOSURE_PAIR_PENALTY = 0.55
+ENABLE_RANDOM_PROFILE_RESAMPLE = False
+EXPOSURE_PAIR_PENALTY = 0.30
 EXPOSURE_TEMPLATE_SIGNATURE_PENALTY = 0.14
 EXPOSURE_FALLBACK_MOTIF_PENALTY = 0.18
 EXPOSURE_MOTIF_FAMILY_PENALTY = 0.60
@@ -70,11 +64,15 @@ RARER_STRONG_ALTERNATIVE_BONUS_CAP = 0.24
 RARER_STRONG_FAMILY_BONUS_STEP = 0.16
 RARER_STRONG_FAMILY_BONUS_CAP = 0.42
 NON_MEAL_COVERAGE_MARGIN = 0.56
+FAMILY_OVERUSE_RANK_PENALTY_STEP = 0.18
+FAMILY_OVERUSE_RANK_PENALTY_CAP = 0.54
+FAMILY_RARITY_CLOSE_SCORE_MARGIN = 0.55
+FAMILY_RARITY_CLOSE_SCORE_BONUS = 0.24
+MEAL_DOMINANT_CLOSE_SCORE_EXTRA_PENALTY = 0.34
+FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD = 2
 GENERIC_THEME_PENALTY = 0.08
 WEAK_CANDIDATE_PENALTY = 0.18
-FINAL_STAGE_REPETITION_PENALTY = 0.36
-FINAL_STAGE_REPETITION_PENALTY_POWER = 1.0
-TUNA_FINAL_STAGE_PENALTY = 0.28
+TOP_TRIO_CANDIDATES_PER_LANE = 18
 RECENCY_BOOST_WEIGHT = 0.28
 COUNT_BOOST_WEIGHT = 0.08
 LANE_INTENT_BOOST_WEIGHT = 0.16
@@ -114,19 +112,75 @@ LOW_PREMIUM_STAPLES = frozenset({"rice", "oil", "sugar", "salt", "water", "flour
 MAX_SAME_ANCHOR_PER_PAGE = 2
 TOP10_ANCHOR_SIZE = 18
 MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE = 40
+RESERVE_CURATED_TEMPLATES_PER_LANE = 8
+RESERVE_ANCHOR_POOL_LIMIT_PER_LANE = 36
 NONFOOD_INCLUDE_RATE = 0.20
+CLEANING_INTENT_INCLUDE_THRESHOLD = 0.22
+CLEANING_INTENT_FILL_THRESHOLD = 0.28
 PREMIUM_TOP_N = 5
 FALLBACK_MOTIF_REPEAT_CAP_PER_PERSON = 1
 FALLBACK_EVAP_MOTIF_CAP_PER_PERSON = 2
-LOW_HISTORY_PRODUCT_COUNT_THRESHOLD = 3
-SERVING_TIER2_REPETITION_RELAX_FACTOR = 0.60
-SERVING_MAX_EFFECTIVE_CANDIDATES = 260
-SERVING_MAX_TIER_FINAL_STAGE_CANDIDATES = 140
-SERVING_PROFILE_ENV_FLAG = "QEU_SERVING_PROFILE"
 FEEDBACK_REVIEW_REL_PATH = Path("review") / "bundle_feedback.csv"
 FEEDBACK_STRONG_BOOST = 0.75
 FEEDBACK_WEAK_PENALTY = 0.45
 FEEDBACK_TRASH_PENALTY = 1.00
+SERVING_PROFILING_ENV = "QEU_SERVING_PROFILE"
+INTENT_SNACK = "snack"
+INTENT_DESSERT = "dessert"
+INTENT_STAPLES = "staples"
+INTENT_PREPARATION = "preparation"
+INTENT_MEAL_BASE = "meal_base"
+INTENT_DRINK_PAIRING = "drink_pairing"
+INTENT_CLEANING = "cleaning"
+BUNDLE_INTENTS = (
+    INTENT_SNACK,
+    INTENT_DESSERT,
+    INTENT_STAPLES,
+    INTENT_PREPARATION,
+    INTENT_MEAL_BASE,
+    INTENT_DRINK_PAIRING,
+    INTENT_CLEANING,
+)
+INTENT_ASSIGNMENT_PRECEDENCE = (
+    INTENT_CLEANING,
+    INTENT_DESSERT,
+    INTENT_DRINK_PAIRING,
+    INTENT_PREPARATION,
+    INTENT_MEAL_BASE,
+    INTENT_STAPLES,
+    INTENT_SNACK,
+)
+INTENT_PRIOR_WEIGHTS: dict[str, float] = {
+    INTENT_SNACK: 0.16,
+    INTENT_DESSERT: 0.15,
+    INTENT_STAPLES: 0.18,
+    INTENT_PREPARATION: 0.14,
+    INTENT_MEAL_BASE: 0.20,
+    INTENT_DRINK_PAIRING: 0.10,
+    INTENT_CLEANING: 0.07,
+}
+INTENT_PROFILE_PRIOR_STRENGTH = 2.0
+INTENT_HISTORY_RECENCY_BASE = 0.75
+INTENT_HISTORY_RECENCY_SPAN = 0.50
+INTENT_HISTORY_FREQUENCY_POWER = 0.50
+INTENT_BOOST_WEIGHT = 0.10
+INTENT_BOOST_MAX = 0.08
+INTENT_DIVERSITY_MAX_PER_PERSON = 2
+INTENT_DIVERSITY_CONCENTRATION_THRESHOLD = 0.60
+INTENT_ROUTING_DOMINANT_MIN_WEIGHT = 0.24
+INTENT_ROUTING_DOMINANT_MIN_GAP = 0.05
+INTENT_ROUTING_MAX_CANDIDATES = 6
+INTENT_ROUTING_MAX_EARLY_SELECTIONS = 1
+CLEANING_INTENT_ROUTING_THRESHOLD = 0.18
+INTENT_ROUTING_ALLOWED_TOP_INTENTS = frozenset(
+    {
+        INTENT_SNACK,
+        INTENT_DESSERT,
+        INTENT_STAPLES,
+        INTENT_DRINK_PAIRING,
+        INTENT_CLEANING,
+    }
+)
 USE_NEW_BUNDLE_SEMANTICS = str(os.getenv("QEU_USE_NEW_BUNDLE_SEMANTICS", "1")).strip().lower() not in {
     "0",
     "false",
@@ -351,6 +405,9 @@ BRAND_STOPWORDS = frozenset(
         "l",
     }
 )
+_NORMALIZE_TEXT_PATTERN = re.compile(r"[^a-z0-9\u0600-\u06FF]+")
+_LAST_SERVING_PROFILE_METRICS: dict[str, object] = {}
+
 KNOWN_COMPLEMENT_PRIORS = {
     "dates": {"qishta", "cream", "gaimar", "قشطة"},
     "tuna": {"mayonnaise", "mayo"},
@@ -413,6 +470,37 @@ FINAL_QUALITY_INSTANT_NOODLE_HINTS = frozenset({"indomie", "instant noodle", "cu
 FINAL_QUALITY_DESSERT_HINTS = frozenset(
     {"dessert", "pudding", "custard", "caramel", "cake", "brownie", "sweet", "jelly", "mousse"}
 )
+FINAL_QUALITY_DAIRY_BEVERAGE_HINTS = frozenset(
+    {
+        "milk",
+        "evaporated milk",
+        "condensed milk",
+        "tea milk",
+        "chocolate milk",
+        "yogurt",
+        "yoghurt",
+        "laban",
+        "laban up",
+    }
+)
+FINAL_QUALITY_DESSERT_SNACK_HINTS = frozenset(
+    {
+        "dessert",
+        "pudding",
+        "custard",
+        "caramel",
+        "cake",
+        "brownie",
+        "sweet",
+        "cookie",
+        "cookies",
+        "biscuit",
+        "biscuits",
+        "wafer",
+        "chocolate",
+        "candy",
+    }
+)
 FINAL_QUALITY_CREAM_CHEESE_HINTS = frozenset({"cream cheese", "cheese spread", "kiri", "puck", "triangle cheese", "labneh"})
 FINAL_QUALITY_BISCUIT_PLAIN_HINTS = frozenset({"tea biscuits", "tea biscuit", "marie biscuit", "plain biscuit", "biscuits", "biscuit"})
 FINAL_QUALITY_NUTELLA_HINTS = frozenset({"nutella", "hazelnut spread", "chocolate spread"})
@@ -440,109 +528,8 @@ FINAL_QUALITY_PASTA_FAMILY_HINTS = frozenset(
 )
 FINAL_QUALITY_CRACKER_HINTS = frozenset({"cracker", "crackers"})
 
-
-@dataclass(frozen=True)
-class ConsumptionCompatibilityRule:
-    rule_id: str
-    left_family: str
-    right_family: str
-
-
-CONSUMPTION_FAMILY_HINTS: dict[str, frozenset[str]] = {
-    "seafood": frozenset(
-        {
-            "tuna",
-            "seafood",
-            "fish",
-            "sardine",
-            "salmon",
-            "mackerel",
-            "anchovy",
-            "shrimp",
-            "prawn",
-        }
-    ),
-    "dairy_beverage": frozenset(
-        {
-            "milk",
-            "fresh milk",
-            "full cream milk",
-            "chocolate milk",
-            "milk drink",
-            "dairy drink",
-            "laban",
-            "yogurt drink",
-            "drinking yogurt",
-            "yogurt",
-            "yoghurt",
-        }
-    ),
-    "dessert_snack": frozenset(
-        {
-            "biscuit",
-            "biscuits",
-            "cookie",
-            "cookies",
-            "cracker",
-            "crackers",
-            "wafer",
-            "chocolate",
-            "dessert",
-            "pudding",
-            "cake",
-            "candy",
-            "sweet",
-            "nutella",
-        }
-    ),
-    "instant_noodles": frozenset(
-        {
-            "instant noodle",
-            "instant noodles",
-            "indomie",
-            "cup noodles",
-            "ramen",
-            "mi sidap",
-            "noodles cup",
-            "noodle cup",
-        }
-    ),
-    "sweet_snack": frozenset(
-        {
-            "chocolate",
-            "candy",
-            "dessert",
-            "sweet",
-            "cookie",
-            "cookies",
-            "biscuit",
-            "biscuits",
-            "wafer",
-            "cake",
-            "pudding",
-            "nutella",
-        }
-    ),
-    "bread": frozenset(
-        {
-            "bread",
-            "toast",
-            "bun",
-            "loaf",
-            "flatbread",
-            "sandwich bread",
-        }
-    ),
-}
-
-CONSUMPTION_HARD_BLOCK_RULES: tuple[ConsumptionCompatibilityRule, ...] = (
-    ConsumptionCompatibilityRule("seafood_dairy_beverage_pair", "seafood", "dairy_beverage"),
-    ConsumptionCompatibilityRule("seafood_dessert_snack_pair", "seafood", "dessert_snack"),
-    ConsumptionCompatibilityRule("instant_noodles_sweet_pair", "instant_noodles", "sweet_snack"),
-    ConsumptionCompatibilityRule("instant_noodles_bread_pair", "instant_noodles", "bread"),
-)
-
 HUMAN_SOFT_PENALTY_BY_PATTERN = {
+    "rice_tuna": 0.12,
     "chicken_tomato_paste": 0.16,
     "chicken_olive_oil": 0.22,
     "utilitarian_fat_protein_meal": 0.68,
@@ -625,6 +612,129 @@ MOTIF_HINTS_MILK_TEA = frozenset({"tea", "coffee", "milk", "evaporated milk", "t
 MOTIF_HINTS_DATES_MILK = frozenset({"milk", "evaporated milk", "condensed milk", "fresh cream", "qishta"})
 MOTIF_HINTS_TOMATO_BASE = frozenset({"tomato paste", "tomato sauce", "ketchup"})
 MOTIF_HINTS_CRUNCHY_SNACK = frozenset({"chips", "crisps", "cracker", "crackers", "nachos", "spring roll chips"})
+INTENT_SNACK_HINTS = frozenset(
+    {
+        "biscuit",
+        "biscuits",
+        "cookie",
+        "cookies",
+        "wafer",
+        "crackers",
+        "cracker",
+        "chips",
+        "chocolate",
+        "candy",
+        "popcorn",
+        "nuts",
+        "snack",
+    }
+)
+INTENT_DESSERT_HINTS = frozenset(
+    {
+        "dessert",
+        "caramel",
+        "custard",
+        "cake",
+        "brownie",
+        "condensed milk",
+        "cream caramel",
+        "pudding",
+        "jelly",
+        "sweet",
+        "qishta",
+    }
+)
+INTENT_STAPLE_HINTS = frozenset(
+    {
+        "rice",
+        "eggs",
+        "egg",
+        "tuna",
+        "oats",
+        "oil",
+        "flour",
+        "sugar",
+        "salt",
+        "water",
+        "tomato paste",
+    }
+)
+INTENT_PREPARATION_HINTS = frozenset(
+    {
+        "sauce",
+        "ketchup",
+        "mayo",
+        "mayonnaise",
+        "dip",
+        "paste",
+        "stock",
+        "seasoning",
+        "bouillon",
+        "masala",
+        "tortilla",
+        "wrap",
+    }
+)
+INTENT_MEAL_BASE_HINTS = frozenset(
+    {
+        "chicken",
+        "meat",
+        "beef",
+        "lamb",
+        "fish",
+        "tuna",
+        "rice",
+        "eggs",
+        "bread",
+        "tortilla",
+        "pasta",
+        "noodle",
+        "noodles",
+    }
+)
+INTENT_DRINK_HINTS = frozenset(
+    {
+        "tea",
+        "coffee",
+        "milk",
+        "evaporated milk",
+        "tea milk",
+        "juice",
+        "soda",
+        "drink",
+        "chocolate milk",
+    }
+)
+INTENT_CLEANING_HINTS = frozenset(
+    {
+        "detergent",
+        "softener",
+        "dish",
+        "dishwashing",
+        "sponge",
+        "disinfectant",
+        "bleach",
+        "toilet cleaner",
+        "cleaner",
+        "wipes",
+        "brush",
+        "tissue",
+    }
+)
+CLEANING_CORE_HINTS = frozenset(
+    {
+        "detergent",
+        "softener",
+        "trash bag",
+        "waste bag",
+        "soap",
+        "dish soap",
+        "disinfectant",
+        "bleach",
+        "cleaner",
+        "toilet cleaner",
+    }
+)
 SHOPPER_FAMILY_BASE_ADJUSTMENT: dict[str, float] = {
     "meal:chicken_wrap_meal": 0.20,
     "meal:nuggets_bread_fastmeal": 0.22,
@@ -1332,8 +1442,24 @@ class ManualProfileBuildResult:
 class ServingTelemetry:
     overall: dict[str, int] = field(default_factory=dict)
     by_lane: dict[str, dict[str, int]] = field(default_factory=dict)
-    timings_ms: dict[str, float] = field(default_factory=dict)
-    profile_timings_ms: list[dict[str, float]] = field(default_factory=list)
+
+
+@dataclass
+class _ServingProfileRecorder:
+    enabled: bool = False
+    per_profile: list[dict[str, object]] = field(default_factory=list)
+    stage_totals: dict[str, float] = field(default_factory=dict)
+
+    def add_stage(self, stage: str, seconds: float) -> None:
+        if not self.enabled:
+            return
+        key = str(stage)
+        self.stage_totals[key] = float(self.stage_totals.get(key, 0.0)) + float(seconds)
+
+    def add_profile(self, payload: dict[str, object]) -> None:
+        if not self.enabled:
+            return
+        self.per_profile.append(dict(payload))
 
 
 @dataclass(frozen=True)
@@ -1487,37 +1613,29 @@ def _record_serving_telemetry(telemetry: ServingTelemetry | None, lane: str, key
     _increment_counter(lane_bucket, key, amount=amount)
 
 
-def _serving_profile_enabled() -> bool:
-    raw = str(os.getenv(SERVING_PROFILE_ENV_FLAG, "") or "").strip().lower()
+def _serving_profiling_enabled() -> bool:
+    raw = str(os.getenv(SERVING_PROFILING_ENV, "") or "").strip().lower()
     return raw in {"1", "true", "yes", "on"}
 
 
-def _record_serving_timing_ms(telemetry: ServingTelemetry | None, key: str, elapsed_sec: float) -> None:
-    if telemetry is None:
-        return
-    if elapsed_sec <= 0.0:
-        return
-    stage_key = str(key).strip().lower()
-    telemetry.timings_ms[stage_key] = float(telemetry.timings_ms.get(stage_key, 0.0)) + float(elapsed_sec * 1000.0)
-
-
-def _merge_timing_ms(target: dict[str, float], source: dict[str, float]) -> None:
-    for key, value in source.items():
-        target[str(key)] = float(target.get(str(key), 0.0)) + float(value)
-
-
-def _percentile(values: list[float], q: float) -> float:
+def _percentile(values: list[float], percentile: float) -> float:
     if not values:
         return 0.0
-    if len(values) == 1:
-        return float(values[0])
-    position = max(0.0, min(1.0, float(q))) * float(len(values) - 1)
-    lo = int(math.floor(position))
-    hi = int(math.ceil(position))
-    if lo == hi:
-        return float(values[lo])
-    frac = float(position - lo)
-    return float(values[lo] + (values[hi] - values[lo]) * frac)
+    ordered = sorted(float(v) for v in values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    rank = max(0.0, min(1.0, float(percentile))) * float(len(ordered) - 1)
+    lower = int(math.floor(rank))
+    upper = int(math.ceil(rank))
+    if lower == upper:
+        return float(ordered[lower])
+    weight = float(rank - lower)
+    return float(ordered[lower] * (1.0 - weight) + ordered[upper] * weight)
+
+
+def get_last_serving_profile_metrics() -> dict[str, object]:
+    payload = _LAST_SERVING_PROFILE_METRICS
+    return dict(payload) if isinstance(payload, dict) else {}
 
 
 def _anchor_rank_sort_key(item: tuple[int, float]) -> tuple[float, int]:
@@ -1529,8 +1647,13 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+@lru_cache(maxsize=200_000)
+def _normalise_text_cached(value: str) -> str:
+    return _NORMALIZE_TEXT_PATTERN.sub(" ", str(value).lower()).strip()
+
+
 def _normalise_text(value: object) -> str:
-    return re.sub(r"[^a-z0-9\u0600-\u06FF]+", " ", str(value).lower()).strip()
+    return _normalise_text_cached(str(value))
 
 
 def _load_brand_alias_tokens(path: Path) -> dict[str, set[str]]:
@@ -2176,15 +2299,21 @@ def _match_text_token(token: str, matcher: ProductMatcher) -> tuple[int | None, 
     return pid, matcher.product_name_by_id.get(pid, token)
 
 
+@lru_cache(maxsize=200_000)
+def _product_text_from_components(name: str, category: str, family: str) -> str:
+    parts = (
+        _normalise_text(name),
+        _normalise_text(category),
+        _normalise_text(family),
+    )
+    return " ".join(part for part in parts if part)
+
+
 def _product_text_for_pid(pid: int, context: PersonalizationContext) -> str:
-    return " ".join(
-        part
-        for part in (
-            _normalise_text(context.product_name_by_id.get(int(pid), "")),
-            _normalise_text(context.category_by_id.get(int(pid), "")),
-            _normalise_text(context.product_family_by_id.get(int(pid), "")),
-        )
-        if part
+    return _product_text_from_components(
+        str(context.product_name_by_id.get(int(pid), "")),
+        str(context.category_by_id.get(int(pid), "")),
+        str(context.product_family_by_id.get(int(pid), "")),
     )
 
 
@@ -2522,20 +2651,6 @@ def _build_bundle_lookup(bundles_df: pd.DataFrame) -> dict[tuple[int, int], pd.S
     return lookup
 
 
-def _build_bundle_pairs_by_product(
-    bundle_lookup: dict[tuple[int, int], pd.Series],
-) -> dict[int, tuple[tuple[int, int, pd.Series], ...]]:
-    by_product: dict[int, list[tuple[int, int, pd.Series]]] = {}
-    for (a, b), row in bundle_lookup.items():
-        a_id = int(a)
-        b_id = int(b)
-        if a_id <= 0 or b_id <= 0 or a_id == b_id:
-            continue
-        by_product.setdefault(a_id, []).append((a_id, b_id, row))
-        by_product.setdefault(b_id, []).append((a_id, b_id, row))
-    return {int(pid): tuple(rows) for pid, rows in by_product.items()}
-
-
 def _build_top_bundle_rows_by_anchor(bundles_df: pd.DataFrame) -> dict[int, list[pd.Series]]:
     by_anchor: dict[int, list[pd.Series]] = {}
     if bundles_df.empty:
@@ -2560,45 +2675,28 @@ def _build_display_dict_from_row(row: pd.Series) -> dict[str, object]:
 
     product_a_price = float(pd.to_numeric(d.get("product_a_price", 0.0), errors="coerce") or 0.0)
     product_b_price = float(pd.to_numeric(d.get("product_b_price", 0.0), errors="coerce") or 0.0)
-    purchase_price_a = float(pd.to_numeric(d.get("purchase_price_a", product_a_price), errors="coerce") or product_a_price)
-    purchase_price_b = float(pd.to_numeric(d.get("purchase_price_b", product_b_price), errors="coerce") or product_b_price)
-    purchase_missing_a = int(float(pd.to_numeric(d.get("purchase_price_missing_a", 1), errors="coerce") or 1))
-    purchase_missing_b = int(float(pd.to_numeric(d.get("purchase_price_missing_b", 1), errors="coerce") or 1))
     d.setdefault("product_a_price", product_a_price)
     d.setdefault("product_b_price", product_b_price)
-    d["purchase_price_a"] = round(purchase_price_a, 2)
-    d["purchase_price_b"] = round(purchase_price_b, 2)
-    d["purchase_price_missing_a"] = int(purchase_missing_a)
-    d["purchase_price_missing_b"] = int(purchase_missing_b)
 
     d["price_a_sar"] = f"{product_a_price:,.2f}"
     d["price_b_sar"] = f"{product_b_price:,.2f}"
-    d["purchase_price_a_sar"] = f"{purchase_price_a:,.2f}"
-    d["purchase_price_b_sar"] = f"{purchase_price_b:,.2f}"
 
-    discount_a = float(FIXED_MARGIN_DISCOUNT_PCT)
-    discount_b = float(FIXED_MARGIN_DISCOUNT_PCT)
+    discount_a = float(pd.to_numeric(d.get("discount_pred_a", d.get("discount_a", 12.0)), errors="coerce") or 0.0)
+    discount_b = float(pd.to_numeric(d.get("discount_pred_b", d.get("discount_b", 12.0)), errors="coerce") or 0.0)
     d["discount_a"] = discount_a
     d["discount_b"] = discount_b
+    d["discount_pred_a"] = discount_a
+    d["discount_pred_b"] = discount_b
 
-    priced = price_paid_and_free_items_fixed_margin(
-        sale_price_a=product_a_price,
-        purchase_price_a=purchase_price_a,
-        sale_price_b=product_b_price,
-        purchase_price_b=purchase_price_b,
-    )
-    d["free_product"] = str(priced["free_product"])
-    d["paid_product"] = "product_a" if str(priced["paid_side"]) == "a" else "product_b"
+    free = str(d.get("free_product", d.get("free_product_raw", ""))).strip().lower()
+    if free not in {"product_a", "product_b", "product_c"}:
+        free = "product_a" if product_a_price <= product_b_price else "product_b"
+    d["free_product"] = free
 
-    after_a = float(priced["price_after_discount_a"])
-    after_b = float(priced["price_after_discount_b"])
-    d["price_after_discount_a"] = round(after_a, 2)
-    d["price_after_discount_b"] = round(after_b, 2)
+    after_a = 0.0 if free == "product_a" else max(0.0, product_a_price * (1 - discount_a / 100.0))
+    after_b = 0.0 if free == "product_b" else max(0.0, product_b_price * (1 - discount_b / 100.0))
     d["price_after_a_sar"] = f"{after_a:,.2f}"
     d["price_after_b_sar"] = f"{after_b:,.2f}"
-    d["unit_profit_a"] = float(priced.get("unit_profit_a", 0.0))
-    d["unit_profit_b"] = float(priced.get("unit_profit_b", 0.0))
-    d["paid_item_final_price"] = float(after_a if d["paid_product"] == "product_a" else after_b)
 
     d.setdefault("is_triple", bool(d.get("is_triple_bundle", False)))
     d.setdefault("product_c_name", "")
@@ -2624,21 +2722,12 @@ def _build_constrained_pair_record(anchor: int, complement: int, context: Person
         price_a = 10.0
         price_b = 5.0
 
-    purchase_a = float(price_a)
-    purchase_b = float(price_b)
-    discount_a = float(FIXED_MARGIN_DISCOUNT_PCT)
-    discount_b = float(FIXED_MARGIN_DISCOUNT_PCT)
+    free = "product_a" if price_a <= price_b else "product_b"
+    discount_a = 12.0
+    discount_b = 12.0
 
-    priced = price_paid_and_free_items_fixed_margin(
-        sale_price_a=price_a,
-        purchase_price_a=purchase_a,
-        sale_price_b=price_b,
-        purchase_price_b=purchase_b,
-    )
-    after_a = float(priced["price_after_discount_a"])
-    after_b = float(priced["price_after_discount_b"])
-    free = str(priced["free_product"])
-    paid_product = "product_a" if str(priced["paid_side"]) == "a" else "product_b"
+    after_a = 0.0 if free == "product_a" else max(0.0, price_a * (1 - discount_a / 100.0))
+    after_b = 0.0 if free == "product_b" else max(0.0, price_b * (1 - discount_b / 100.0))
 
     return {
         "product_a": int(anchor),
@@ -2647,22 +2736,15 @@ def _build_constrained_pair_record(anchor: int, complement: int, context: Person
         "product_b_name": name_b,
         "product_a_price": round(price_a, 2),
         "product_b_price": round(price_b, 2),
-        "purchase_price_a": round(purchase_a, 2),
-        "purchase_price_b": round(purchase_b, 2),
-        "purchase_price_missing_a": 1,
-        "purchase_price_missing_b": 1,
         "price_a_sar": f"{price_a:,.2f}",
         "price_b_sar": f"{price_b:,.2f}",
-        "purchase_price_a_sar": f"{purchase_a:,.2f}",
-        "purchase_price_b_sar": f"{purchase_b:,.2f}",
         "price_after_a_sar": f"{after_a:,.2f}",
         "price_after_b_sar": f"{after_b:,.2f}",
-        "price_after_discount_a": round(after_a, 2),
-        "price_after_discount_b": round(after_b, 2),
-        "paid_product": paid_product,
         "free_product": free,
         "discount_a": discount_a,
         "discount_b": discount_b,
+        "discount_pred_a": discount_a,
+        "discount_pred_b": discount_b,
         "product_a_picture": str(context.product_picture_by_id.get(anchor, "") or ""),
         "product_b_picture": str(context.product_picture_by_id.get(complement, "") or ""),
         "product_c_name": "",
@@ -2691,43 +2773,6 @@ def _token_set(text: str) -> set[str]:
 def _text_has_any_hint(text: str, hints: frozenset[str]) -> bool:
     norm = _normalise_text(text)
     return any(hint in norm for hint in hints)
-
-
-def _consumption_families_for_text(text: str) -> set[str]:
-    text_tokens = tuple(token for token in _normalise_text(text).split() if token)
-    if not text_tokens:
-        return set()
-
-    def _tokens_match_hint(hint: str) -> bool:
-        hint_tokens = tuple(token for token in _normalise_text(hint).split() if token)
-        if not hint_tokens:
-            return False
-        if len(hint_tokens) == 1:
-            return hint_tokens[0] in text_tokens
-        hint_size = len(hint_tokens)
-        for idx in range(0, len(text_tokens) - hint_size + 1):
-            if text_tokens[idx : idx + hint_size] == hint_tokens:
-                return True
-        return False
-
-    families: set[str] = set()
-    for family, hints in CONSUMPTION_FAMILY_HINTS.items():
-        if any(_tokens_match_hint(hint) for hint in hints):
-            families.add(family)
-    return families
-
-
-def _consumption_pair_reject_reason(text_a: str, text_b: str) -> str | None:
-    families_a = _consumption_families_for_text(text_a)
-    families_b = _consumption_families_for_text(text_b)
-    if not families_a or not families_b:
-        return None
-    for rule in CONSUMPTION_HARD_BLOCK_RULES:
-        direct = rule.left_family in families_a and rule.right_family in families_b
-        reverse = rule.left_family in families_b and rule.right_family in families_a
-        if direct or reverse:
-            return str(rule.rule_id)
-    return None
 
 
 def _is_plain_milk_beverage_text(text: str) -> bool:
@@ -2761,6 +2806,300 @@ def _pair_matches_hints(text_a: str, text_b: str, left_hints: frozenset[str], ri
         (_text_has_any_hint(text_a, left_hints) and _text_has_any_hint(text_b, right_hints))
         or (_text_has_any_hint(text_b, left_hints) and _text_has_any_hint(text_a, right_hints))
     )
+
+
+def _is_cleaning_core_text(text: str) -> bool:
+    return _text_has_any_hint(text, CLEANING_CORE_HINTS)
+
+
+def _bundle_sanity_reject_reason(
+    anchor: int,
+    complement: int,
+    lane: str,
+    context: PersonalizationContext,
+    *,
+    pair_row: pd.Series | None = None,
+) -> str | None:
+    if int(anchor) <= 0 or int(complement) <= 0 or int(anchor) == int(complement):
+        return "invalid_pair"
+    lane_key = str(lane).strip().lower() or LANE_MEAL
+    if lane_key not in {LANE_MEAL, LANE_SNACK, LANE_OCCASION, LANE_NONFOOD}:
+        lane_key = LANE_MEAL
+
+    a_nonfood = _is_nonfood_product(int(anchor), context, row=pair_row, side="a")
+    b_nonfood = _is_nonfood_product(int(complement), context, row=pair_row, side="b")
+    if a_nonfood != b_nonfood:
+        return "food_cleaning_cross_domain"
+    if lane_key in FOOD_LANE_ORDER and (a_nonfood or b_nonfood):
+        return "food_lane_contains_nonfood"
+    if lane_key == LANE_NONFOOD and not (a_nonfood and b_nonfood):
+        return "nonfood_lane_contains_food"
+
+    a_name = _product_name(int(anchor), context, row=pair_row, side="a")
+    b_name = _product_name(int(complement), context, row=pair_row, side="b")
+    a_cat = _product_category(int(anchor), context, row=pair_row, side="a")
+    b_cat = _product_category(int(complement), context, row=pair_row, side="b")
+    a_family = _product_family(int(anchor), context, row=pair_row, side="a")
+    b_family = _product_family(int(complement), context, row=pair_row, side="b")
+    text_a = semantics.normalize_product_text(a_name, a_cat, a_family)
+    text_b = semantics.normalize_product_text(b_name, b_cat, b_family)
+
+    if a_nonfood and b_nonfood:
+        if _is_cleaning_core_text(text_a) or _is_cleaning_core_text(text_b):
+            return None
+        group_a = _nonfood_group_for_pid(int(anchor), context, row=pair_row, side="a")
+        group_b = _nonfood_group_for_pid(int(complement), context, row=pair_row, side="b")
+        if not group_a or not group_b:
+            return "unknown_nonfood_group"
+        return None
+
+    tuna_a = _text_has_any_hint(text_a, FINAL_QUALITY_TUNA_HINTS)
+    tuna_b = _text_has_any_hint(text_b, FINAL_QUALITY_TUNA_HINTS)
+    dairy_beverage_a = _text_has_any_hint(text_a, FINAL_QUALITY_DAIRY_BEVERAGE_HINTS)
+    dairy_beverage_b = _text_has_any_hint(text_b, FINAL_QUALITY_DAIRY_BEVERAGE_HINTS)
+    dessert_snack_a = _text_has_any_hint(text_a, FINAL_QUALITY_DESSERT_SNACK_HINTS)
+    dessert_snack_b = _text_has_any_hint(text_b, FINAL_QUALITY_DESSERT_SNACK_HINTS)
+    instant_noodle_a = _text_has_any_hint(text_a, FINAL_QUALITY_NOODLE_HINTS | FINAL_QUALITY_INSTANT_NOODLE_HINTS)
+    instant_noodle_b = _text_has_any_hint(text_b, FINAL_QUALITY_NOODLE_HINTS | FINAL_QUALITY_INSTANT_NOODLE_HINTS)
+    bread_like_a = _text_has_any_hint(text_a, HUMAN_HINTS_BREAD | frozenset({"toast", "loaf", "wrap", "tortilla", "pita"}))
+    bread_like_b = _text_has_any_hint(text_b, HUMAN_HINTS_BREAD | frozenset({"toast", "loaf", "wrap", "tortilla", "pita"}))
+
+    if (tuna_a and dairy_beverage_b) or (tuna_b and dairy_beverage_a):
+        return "tuna_dairy_beverage_pair"
+    if (tuna_a and dessert_snack_b) or (tuna_b and dessert_snack_a):
+        return "tuna_dessert_snack_pair"
+    if (instant_noodle_a and dessert_snack_b) or (instant_noodle_b and dessert_snack_a):
+        return "instant_noodles_sweets_pair"
+    if (instant_noodle_a and bread_like_b) or (instant_noodle_b and bread_like_a):
+        return "instant_noodles_bread_pair"
+
+    if _is_cleaning_core_text(text_a) or _is_cleaning_core_text(text_b):
+        return "cleaning_token_in_food_bundle"
+    sem = _semantic_pair_snapshot(int(anchor), int(complement), lane_key, context, pair_row=pair_row)
+    if str(sem.strength) == semantics.STRENGTH_TRASH:
+        return "semantic_trash_pair"
+    return None
+
+
+def _default_intent_profile() -> dict[str, float]:
+    priors = {str(intent): float(INTENT_PRIOR_WEIGHTS.get(str(intent), 0.0)) for intent in BUNDLE_INTENTS}
+    total = float(sum(max(0.0, value) for value in priors.values()))
+    if total <= 0.0:
+        return {str(intent): float(1.0 / len(BUNDLE_INTENTS)) for intent in BUNDLE_INTENTS}
+    return {str(intent): float(max(0.0, priors[intent]) / total) for intent in BUNDLE_INTENTS}
+
+
+def _normalise_intent_profile(raw_scores: dict[str, float]) -> dict[str, float]:
+    base = {str(intent): float(max(0.0, raw_scores.get(str(intent), 0.0))) for intent in BUNDLE_INTENTS}
+    total = float(sum(base.values()))
+    if total <= 1e-9:
+        return _default_intent_profile()
+    return {intent: float(base[intent] / total) for intent in BUNDLE_INTENTS}
+
+
+def _top_intent(profile_weights: dict[str, float]) -> tuple[str, float]:
+    if not profile_weights:
+        default_profile = _default_intent_profile()
+        top_key = max(BUNDLE_INTENTS, key=lambda intent: float(default_profile.get(intent, 0.0)))
+        return str(top_key), float(default_profile.get(top_key, 0.0))
+    top_key = max(BUNDLE_INTENTS, key=lambda intent: float(profile_weights.get(intent, 0.0)))
+    return str(top_key), float(profile_weights.get(top_key, 0.0))
+
+
+def _item_intent_scores(
+    *,
+    name: str,
+    category: str,
+    family: str,
+    groups: set[str],
+    nonfood: bool,
+) -> dict[str, float]:
+    scores = {str(intent): 0.0 for intent in BUNDLE_INTENTS}
+    text = " ".join(part for part in (_normalise_text(name), _normalise_text(category), _normalise_text(family)) if part)
+    union = set(groups)
+
+    snack_groups = {GROUP_SNACKS, GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS}
+    drink_groups = {GROUP_TEA, GROUP_COFFEE, GROUP_MILK, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}
+    dessert_groups = {GROUP_SWEETS, GROUP_DATES, GROUP_CREAM, GROUP_CHOCOLATE, GROUP_COOKIES, GROUP_CANDY}
+    meal_groups = {GROUP_PROTEIN, GROUP_RICE_GRAINS, GROUP_BREAD_CARB, GROUP_NOODLES_PASTA}
+    cleaning_groups = {
+        GROUP_NONFOOD_CLEANING,
+        GROUP_NONFOOD_HAIR,
+        GROUP_NONFOOD_BODY,
+        GROUP_NONFOOD_TISSUE,
+        GROUP_NONFOOD_OTHER,
+    }
+
+    if nonfood or bool(union & cleaning_groups) or _text_has_any_hint(text, INTENT_CLEANING_HINTS):
+        scores[INTENT_CLEANING] += 2.8
+    if bool(union & snack_groups) or _text_has_any_hint(text, INTENT_SNACK_HINTS):
+        scores[INTENT_SNACK] += 1.6
+    if bool(union & dessert_groups) or _text_has_any_hint(text, INTENT_DESSERT_HINTS):
+        scores[INTENT_DESSERT] += 1.4
+    if _text_has_any_hint(text, INTENT_STAPLE_HINTS):
+        scores[INTENT_STAPLES] += 1.6
+    if _text_has_any_hint(text, INTENT_PREPARATION_HINTS) or GROUP_SPICES in union:
+        scores[INTENT_PREPARATION] += 1.3
+    if bool(union & meal_groups) or _text_has_any_hint(text, INTENT_MEAL_BASE_HINTS):
+        scores[INTENT_MEAL_BASE] += 1.2
+    if bool(union & drink_groups) or _text_has_any_hint(text, INTENT_DRINK_HINTS):
+        scores[INTENT_DRINK_PAIRING] += 1.3
+    return scores
+
+
+def _build_user_intent_profile(profile: PersonProfile, context: PersonalizationContext) -> dict[str, float]:
+    history = [int(pid) for pid in profile.history_product_ids if int(pid) > 0]
+    if not history:
+        return _default_intent_profile()
+
+    raw_scores = {str(intent): 0.0 for intent in BUNDLE_INTENTS}
+    total_items = float(max(1, len(history)))
+    for idx, pid in enumerate(history):
+        name = _product_name(pid, context)
+        category = _product_category(pid, context)
+        family = _product_family(pid, context)
+        groups = _group_labels_from_text(name, category, family)
+        count = float(max(1.0, float(profile.history_counts.get(int(pid), 1.0))))
+        recency_weight = float(INTENT_HISTORY_RECENCY_BASE) + float(INTENT_HISTORY_RECENCY_SPAN) * float((idx + 1.0) / total_items)
+        frequency_weight = float(count ** float(INTENT_HISTORY_FREQUENCY_POWER))
+        total_weight = float(recency_weight * frequency_weight)
+        item_scores = _item_intent_scores(
+            name=name,
+            category=category,
+            family=family,
+            groups=groups,
+            nonfood=bool(_is_nonfood_product(pid, context)),
+        )
+        for intent in BUNDLE_INTENTS:
+            raw_scores[intent] = float(raw_scores.get(intent, 0.0)) + float(item_scores.get(intent, 0.0)) * total_weight
+
+    priors = _default_intent_profile()
+    for intent in BUNDLE_INTENTS:
+        raw_scores[intent] = float(raw_scores.get(intent, 0.0)) + float(INTENT_PROFILE_PRIOR_STRENGTH) * float(priors[intent])
+    return _normalise_intent_profile(raw_scores)
+
+
+def _bundle_primary_intent(
+    candidate: dict[str, object],
+    context: PersonalizationContext,
+    lane_hint: str | None = None,
+) -> str:
+    existing = str(candidate.get("primary_intent", "")).strip().lower()
+    if existing in BUNDLE_INTENTS:
+        return existing
+    (
+        anchor,
+        complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    lane = str(lane_hint or candidate.get("lane", "")).strip().lower()
+    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+    groups_a = _group_labels_from_text(name_a, cat_a, fam_a)
+    groups_b = _group_labels_from_text(name_b, cat_b, fam_b)
+    union = set(groups_a) | set(groups_b)
+    nonfood_a = _is_nonfood_product(anchor, context, row=pair_row, side="a")
+    nonfood_b = _is_nonfood_product(complement, context, row=pair_row, side="b")
+    if lane == LANE_NONFOOD or (nonfood_a and nonfood_b):
+        return INTENT_CLEANING
+
+    has_drink = bool(union & {GROUP_TEA, GROUP_COFFEE, GROUP_MILK, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}) or bool(
+        _text_has_any_hint(text_a, INTENT_DRINK_HINTS) or _text_has_any_hint(text_b, INTENT_DRINK_HINTS)
+    )
+    has_snack = bool(union & {GROUP_SNACKS, GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS}) or bool(
+        _text_has_any_hint(text_a, INTENT_SNACK_HINTS) or _text_has_any_hint(text_b, INTENT_SNACK_HINTS)
+    )
+    has_dessert = bool(union & {GROUP_SWEETS, GROUP_DATES, GROUP_CREAM, GROUP_CHOCOLATE, GROUP_COOKIES, GROUP_CANDY}) or bool(
+        _text_has_any_hint(text_a, INTENT_DESSERT_HINTS) or _text_has_any_hint(text_b, INTENT_DESSERT_HINTS)
+    )
+    has_helper = bool(_text_has_any_hint(text_a, INTENT_PREPARATION_HINTS) or _text_has_any_hint(text_b, INTENT_PREPARATION_HINTS))
+    has_protein = bool(union & {GROUP_PROTEIN}) or bool(
+        _text_has_any_hint(text_a, HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS)
+        or _text_has_any_hint(text_b, HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS)
+    )
+    has_starch = bool(union & {GROUP_RICE_GRAINS, GROUP_BREAD_CARB, GROUP_NOODLES_PASTA}) or bool(
+        _text_has_any_hint(text_a, HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodle", "noodles"}))
+        or _text_has_any_hint(text_b, HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodle", "noodles"}))
+    )
+    staple_a = _text_has_any_hint(text_a, INTENT_STAPLE_HINTS)
+    staple_b = _text_has_any_hint(text_b, INTENT_STAPLE_HINTS)
+
+    # 1) Dessert-first rule for clearly sweet/dessert structure.
+    if _pair_matches_hints(text_a, text_b, FINAL_QUALITY_DESSERT_HINTS | HUMAN_HINTS_CONDENSED_MILK, HUMAN_HINTS_CREAM_TOKEN | HUMAN_HINTS_MILK):
+        return INTENT_DESSERT
+    if has_dessert and (bool(_text_has_any_hint(text_a, INTENT_DESSERT_HINTS) and _text_has_any_hint(text_b, INTENT_DESSERT_HINTS))):
+        return INTENT_DESSERT
+    if lane == LANE_OCCASION and has_dessert and bool(has_drink or (union & {GROUP_CREAM, GROUP_MILK, GROUP_DAIRY})):
+        return INTENT_DESSERT
+
+    # 2) Drink pairing beats snack when drink structure is present.
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK):
+        return INTENT_DRINK_PAIRING
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MILK | HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_BISCUITS):
+        return INTENT_DRINK_PAIRING
+    if has_drink and (has_snack or has_dessert):
+        return INTENT_DRINK_PAIRING
+    if lane == LANE_OCCASION and has_drink:
+        return INTENT_DRINK_PAIRING
+
+    # 3) Preparation beats meal_base when one side is helper/condiment.
+    if _pair_matches_hints(
+        text_a,
+        text_b,
+        FINAL_QUALITY_TUNA_HINTS | HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS,
+        HUMAN_HINTS_SAUCE | MOTIF_HINTS_TOMATO_BASE | HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD | HUMAN_HINTS_STOCK,
+    ):
+        return INTENT_PREPARATION
+    if has_protein and has_helper:
+        return INTENT_PREPARATION
+
+    # 4) Meal base beats staples when a meal-core structure exists.
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        return INTENT_STAPLES
+    if _pair_matches_hints(
+        text_a,
+        text_b,
+        HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS,
+        HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodle", "noodles"}),
+    ):
+        return INTENT_MEAL_BASE
+    if has_protein and has_starch:
+        return INTENT_MEAL_BASE
+    if lane == LANE_MEAL and has_protein and bool(union & {GROUP_PRODUCE, GROUP_SPICES}):
+        return INTENT_MEAL_BASE
+
+    # 5) Staples.
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        return INTENT_STAPLES
+    if staple_a and staple_b:
+        return INTENT_STAPLES
+    if (staple_a or staple_b) and lane == LANE_MEAL:
+        return INTENT_STAPLES
+
+    # 6) Snack fallback.
+    if lane == LANE_SNACK:
+        return INTENT_SNACK
+    if has_snack:
+        return INTENT_SNACK
+    if lane == LANE_OCCASION:
+        return INTENT_DRINK_PAIRING
+    return INTENT_MEAL_BASE
+
+
+def _intent_profile_boost(intent: str, user_intent_profile: dict[str, float]) -> float:
+    intent_key = str(intent).strip().lower()
+    if intent_key not in BUNDLE_INTENTS:
+        return 0.0
+    score = float(user_intent_profile.get(intent_key, 0.0))
+    centered = float(score - (1.0 / max(1, len(BUNDLE_INTENTS))))
+    boost = float(INTENT_BOOST_WEIGHT * centered)
+    return float(max(-INTENT_BOOST_MAX, min(INTENT_BOOST_MAX, boost)))
 
 
 def _candidate_family_pattern_signature(candidate: dict[str, object], context: PersonalizationContext) -> str:
@@ -3071,6 +3410,8 @@ def _human_preference_score_adjustment(candidate: dict[str, object], context: Pe
     text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
     adjustment = 0.0
 
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["rice_tuna"])
     if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_OLIVE_OIL | frozenset({"oil", "ghee"}), HUMAN_HINTS_STOCK):
         adjustment -= float(HUMAN_SOFT_PENALTY_BY_PATTERN["meal_utilitarian_stock_oil"])
     if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_CHICKEN, HUMAN_HINTS_TOMATO_PASTE):
@@ -3220,14 +3561,22 @@ def _final_human_quality_reject_reason(
     text_b = semantics.normalize_product_text(analysis.complement_name, analysis.complement_category, analysis.complement_family)
     text_pair = f"{text_a}::{text_b}"
 
-    consumption_reject = _consumption_pair_reject_reason(text_a, text_b)
-    if consumption_reject:
-        return consumption_reject
-
     tuna_a = _text_has_any_hint(text_a, FINAL_QUALITY_TUNA_HINTS)
     tuna_b = _text_has_any_hint(text_b, FINAL_QUALITY_TUNA_HINTS)
+    rice_family_a = _text_has_any_hint(text_a, FINAL_QUALITY_RICE_FAMILY_HINTS) and not _text_has_any_hint(
+        text_a, FINAL_QUALITY_CRACKER_HINTS
+    )
+    rice_family_b = _text_has_any_hint(text_b, FINAL_QUALITY_RICE_FAMILY_HINTS) and not _text_has_any_hint(
+        text_b, FINAL_QUALITY_CRACKER_HINTS
+    )
+    pasta_family_a = _text_has_any_hint(text_a, FINAL_QUALITY_PASTA_FAMILY_HINTS)
+    pasta_family_b = _text_has_any_hint(text_b, FINAL_QUALITY_PASTA_FAMILY_HINTS)
+    if (tuna_a and (rice_family_b or pasta_family_b)) or (tuna_b and (rice_family_a or pasta_family_a)):
+        return "tuna_with_rice_or_pasta_pair"
     milk_a = _is_plain_milk_beverage_text(text_a)
     milk_b = _is_plain_milk_beverage_text(text_b)
+    if (tuna_a and milk_b) or (tuna_b and milk_a):
+        return "tuna_milk_pair"
     peanut_a = _text_has_any_hint(text_a, FINAL_QUALITY_PEANUT_BUTTER_HINTS)
     peanut_b = _text_has_any_hint(text_b, FINAL_QUALITY_PEANUT_BUTTER_HINTS)
     if (tuna_a and peanut_b) or (tuna_b and peanut_a):
@@ -3298,7 +3647,8 @@ def _final_human_quality_reject_reason(
     ):
         return "dessert_plain_milk_pair"
     if (
-        _pair_matches_hints(text_a, text_b, FINAL_QUALITY_NUTELLA_HINTS, HUMAN_HINTS_MILK)
+        lane == LANE_OCCASION
+        and _pair_matches_hints(text_a, text_b, FINAL_QUALITY_NUTELLA_HINTS, HUMAN_HINTS_MILK)
         and (_is_plain_milk_beverage_text(text_a) or _is_plain_milk_beverage_text(text_b))
     ):
         return "nutella_plain_milk_occasion_pair"
@@ -3641,7 +3991,7 @@ def _semantic_lane_compatible(
     if lane != LANE_NONFOOD and (a_is_nonfood or b_is_nonfood):
         return False
     if lane == LANE_NONFOOD:
-        return bool(a_is_nonfood and b_is_nonfood and sem_a == sem_b)
+        return bool(a_is_nonfood and b_is_nonfood)
 
     if SEM_DESSERT in sem_pair and sem_pair & SAVORY_SEMANTIC_GROUPS:
         return False
@@ -4266,6 +4616,13 @@ def _nonfood_pair_close_enough(
     fam_b_norm = _normalise_text(family_b)
     if fam_a_norm and fam_b_norm and fam_a_norm == fam_b_norm:
         return True
+    core_a = _is_cleaning_core_text(f"{group_a} {cat_a_norm} {fam_a_norm}")
+    core_b = _is_cleaning_core_text(f"{group_b} {cat_b_norm} {fam_b_norm}")
+    if core_a or core_b:
+        return True
+    allowed_nonfood_groups = {"cleaning", "tissue", "other", "body", "hair"}
+    if group_a and group_b and {str(group_a), str(group_b)} <= allowed_nonfood_groups:
+        return True
     return False
 
 
@@ -4738,10 +5095,19 @@ def _passes_complement_gate(
     if lane == LANE_NONFOOD:
         if not (anchor_nonfood and comp_nonfood):
             return False
+        sanity_reject = _bundle_sanity_reject_reason(int(anchor), int(complement), lane, context, pair_row=pair_row)
+        if sanity_reject:
+            return False
         group_a = _nonfood_group_for_pid(int(anchor), context, row=pair_row, side="a")
         group_b = _nonfood_group_for_pid(int(complement), context, row=pair_row, side="b")
         if not group_a or not group_b:
             return False
+        anchor_text = semantics.normalize_product_text(anchor_name, anchor_cat, anchor_family)
+        comp_text = semantics.normalize_product_text(comp_name, comp_cat, comp_family)
+        if _is_cleaning_core_text(anchor_text) or _is_cleaning_core_text(comp_text):
+            return True
+        if {str(group_a), str(group_b)} <= {"cleaning", "tissue", "other", "body", "hair"}:
+            return True
         return bool(group_a == group_b)
 
     if pair.anchor_packaging:
@@ -4919,22 +5285,35 @@ def _passes_pair_filters(
         return False
     if USE_NEW_BUNDLE_SEMANTICS:
         sem = pair.semantic
-        if sem.hard_invalid:
-            return False
-        if STRICT_SEMANTIC_FILTERING and not sem.lane_allowed:
-            return False
-        if str(sem.strength) == semantics.STRENGTH_TRASH:
-            return False
-        if not pair.visible_ok:
-            return False
-        if lane == LANE_SNACK:
-            if _snack_pattern_key(pair.anchor_groups, pair.complement_groups) is None:
-                return False
         if _is_food_lane(lane):
+            if sem.hard_invalid:
+                return False
+            if STRICT_SEMANTIC_FILTERING and not sem.lane_allowed:
+                return False
+            if str(sem.strength) == semantics.STRENGTH_TRASH:
+                return False
+            if not pair.visible_ok:
+                return False
+            if lane == LANE_SNACK and _snack_pattern_key(pair.anchor_groups, pair.complement_groups) is None:
+                return False
             return True
         group_a = _nonfood_group_for_pid(anchor, context, row=pair_row, side="a")
         group_b = _nonfood_group_for_pid(complement, context, row=pair_row, side="b")
-        return bool(group_a and group_b and group_a == group_b)
+        if not group_a or not group_b:
+            return False
+        sanity_reject = _bundle_sanity_reject_reason(int(anchor), int(complement), lane, context, pair_row=pair_row)
+        if sanity_reject:
+            return False
+        return bool(
+            _nonfood_pair_close_enough(
+                str(group_a),
+                str(group_b),
+                pair.anchor_category,
+                pair.complement_category,
+                pair.anchor_family,
+                pair.complement_family,
+            )
+        )
     feedback_override = _feedback_pair_override(int(anchor), int(complement))
     if feedback_override and _is_food_lane(lane):
         return True
@@ -5246,19 +5625,9 @@ def _pick_candidate_for_anchor(
     allow_anchor_overflow: bool = False,
     allowed_complements: set[int] | None = None,
     serving_telemetry: ServingTelemetry | None = None,
-    history_ids_override: set[int] | None = None,
-    preferred_brand_by_family_override: dict[str, str] | None = None,
 ) -> tuple[dict[str, object] | None, tuple[int, int] | None, float, int]:
-    history_ids = (
-        {int(pid) for pid in history_ids_override if int(pid) > 0}
-        if history_ids_override is not None
-        else {int(pid) for pid in profile.history_product_ids if int(pid) > 0}
-    )
-    preferred_brand_by_family = (
-        preferred_brand_by_family_override
-        if preferred_brand_by_family_override is not None
-        else _profile_brand_preference_by_family(profile, context)
-    )
+    history_ids = {int(pid) for pid in profile.history_product_ids}
+    preferred_brand_by_family = _profile_brand_preference_by_family(profile, context)
     duplicate_pair_blocked = 0
     blocked_ids = {int(pid) for pid in (blocked_product_ids or set()) if int(pid) > 0}
     allowed_ids = {int(pid) for pid in (allowed_complements or set()) if int(pid) > 0}
@@ -5588,12 +5957,14 @@ def _fallback_candidates_for_lane(
     context: PersonalizationContext,
     top_bundle_rows_by_anchor: dict[int, list[pd.Series]],
     bundle_lookup: dict[tuple[int, int], pd.Series],
-    bundle_pairs_by_product: dict[int, tuple[tuple[int, int, pd.Series], ...]] | None = None,
+    *,
+    template_limit: int | None = None,
 ) -> list[tuple[int, int, pd.Series | None, str]]:
     lane_name = str(lane).strip().lower()
     templates = _curated_entries_for_lane(lane_name)
     if lane_name in FOOD_LANE_ORDER:
-        templates = templates[:MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE]
+        limit = int(template_limit) if template_limit is not None else int(MAX_CURATED_FALLBACK_TEMPLATES_PER_LANE)
+        templates = templates[: max(1, limit)]
     if not templates:
         return []
 
@@ -5630,26 +6001,14 @@ def _fallback_candidates_for_lane(
             _add_evidence(int(a), int(b), row, float(cp_score), "top_bundle")
             _add_evidence(int(b), int(a), row, float(cp_score), "top_bundle")
 
-    if bundle_pairs_by_product:
-        seen_lookup_pairs: set[tuple[int, int]] = set()
-        for pid in history_pool:
-            for a, b, row in bundle_pairs_by_product.get(int(pid), ()):
-                pair_key = _pair_key(int(a), int(b))
-                if pair_key in seen_lookup_pairs:
-                    continue
-                seen_lookup_pairs.add(pair_key)
-                cp_score = _safe_float(row.get("purchase_score", row.get("copurchase_score", 0.0)), default=0.0)
-                _add_evidence(int(a), int(b), row, float(cp_score), "bundle_lookup")
-                _add_evidence(int(b), int(a), row, float(cp_score), "bundle_lookup")
-    else:
-        for (a, b), row in bundle_lookup.items():
-            if int(a) <= 0 or int(b) <= 0 or int(a) == int(b):
-                continue
-            if int(a) not in history_set and int(b) not in history_set:
-                continue
-            cp_score = _safe_float(row.get("purchase_score", row.get("copurchase_score", 0.0)), default=0.0)
-            _add_evidence(int(a), int(b), row, float(cp_score), "bundle_lookup")
-            _add_evidence(int(b), int(a), row, float(cp_score), "bundle_lookup")
+    for (a, b), row in bundle_lookup.items():
+        if int(a) <= 0 or int(b) <= 0 or int(a) == int(b):
+            continue
+        if int(a) not in history_set and int(b) not in history_set:
+            continue
+        cp_score = _safe_float(row.get("purchase_score", row.get("copurchase_score", 0.0)), default=0.0)
+        _add_evidence(int(a), int(b), row, float(cp_score), "bundle_lookup")
+        _add_evidence(int(b), int(a), row, float(cp_score), "bundle_lookup")
 
     for pid in history_pool:
         for neighbor, cp_score in list(context.neighbors.get(int(pid), ()))[:MAX_COPURCHASE_FALLBACK]:
@@ -5661,9 +6020,67 @@ def _fallback_candidates_for_lane(
     if not evidence_pairs:
         return []
 
+    evidence_items = list(evidence_pairs.items())
+    pid_text_cache: dict[int, str] = {}
+    for (a, b), (_row, _cp_score, _source) in evidence_items:
+        if int(a) not in pid_text_cache:
+            pid_text_cache[int(a)] = _product_text_for_pid(int(a), context)
+        if int(b) not in pid_text_cache:
+            pid_text_cache[int(b)] = _product_text_for_pid(int(b), context)
+
+    pair_pass_cache: dict[tuple[int, int], bool] = {}
+
+    def _pair_passes_fallback_filters(anchor: int, complement: int, row: pd.Series | None, cp_score: float) -> bool:
+        key = (int(anchor), int(complement))
+        cached = pair_pass_cache.get(key)
+        if cached is not None:
+            return bool(cached)
+        analysis = _pair_analysis(int(anchor), int(complement), lane_name, context, pair_row=row)
+        if lane_name in FOOD_LANE_ORDER and not _anchor_allowed_for_lane(int(anchor), lane_name, context, row=row):
+            pair_pass_cache[key] = False
+            return False
+        sanity_reject = _bundle_sanity_reject_reason(int(anchor), int(complement), lane_name, context, pair_row=row)
+        if sanity_reject:
+            pair_pass_cache[key] = False
+            return False
+        if not _passes_pair_filters(
+            int(anchor),
+            int(complement),
+            history_set,
+            context,
+            lane=lane_name,
+            pair_row=row,
+            analysis=analysis,
+        ):
+            pair_pass_cache[key] = False
+            return False
+        recipe_compat = _recipe_compatibility(int(anchor), int(complement), context)
+        prior_bonus = _known_prior_bonus(analysis.anchor_name, analysis.complement_name)
+        pair_count = int(
+            _safe_int(row.get("pair_count", row.get("co_purchase_count", 0)) if row is not None else 0, default=0)
+        )
+        if not _passes_complement_gate(
+            anchor=int(anchor),
+            complement=int(complement),
+            context=context,
+            cp_score=float(cp_score),
+            recipe_compat=float(recipe_compat),
+            prior_bonus=float(prior_bonus),
+            lane=lane_name,
+            pair_count=int(pair_count),
+            pair_row=row,
+            analysis=analysis,
+        ):
+            pair_pass_cache[key] = False
+            return False
+        if lane_name in FOOD_LANE_ORDER and str(analysis.semantic.strength) == semantics.STRENGTH_WEAK:
+            pair_pass_cache[key] = False
+            return False
+        pair_pass_cache[key] = True
+        return True
+
     ranked: list[tuple[tuple[int, int, int, int, float, int, int], int, int, pd.Series | None, str]] = []
     seen_pair_keys: set[tuple[int, int]] = set()
-    evidence_items = list(evidence_pairs.items())
 
     for template in templates:
         template_id = str(template.get("id", "")).strip() or "unknown"
@@ -5684,38 +6101,7 @@ def _fallback_candidates_for_lane(
             if evidence is None:
                 return
             row, cp_score, evidence_source = evidence
-            analysis = _pair_analysis(int(anchor), int(complement), lane_name, context, pair_row=row)
-            if lane_name in FOOD_LANE_ORDER and not _anchor_allowed_for_lane(int(anchor), lane_name, context, row=row):
-                return
-            if not _passes_pair_filters(
-                int(anchor),
-                int(complement),
-                history_set,
-                context,
-                lane=lane_name,
-                pair_row=row,
-                analysis=analysis,
-            ):
-                return
-            recipe_compat = _recipe_compatibility(int(anchor), int(complement), context)
-            prior_bonus = _known_prior_bonus(analysis.anchor_name, analysis.complement_name)
-            pair_count = int(
-                _safe_int(row.get("pair_count", row.get("co_purchase_count", 0)) if row is not None else 0, default=0)
-            )
-            if not _passes_complement_gate(
-                anchor=int(anchor),
-                complement=int(complement),
-                context=context,
-                cp_score=float(cp_score),
-                recipe_compat=float(recipe_compat),
-                prior_bonus=float(prior_bonus),
-                lane=lane_name,
-                pair_count=int(pair_count),
-                pair_row=row,
-                analysis=analysis,
-            ):
-                return
-            if lane_name in FOOD_LANE_ORDER and str(analysis.semantic.strength) == semantics.STRENGTH_WEAK:
+            if not _pair_passes_fallback_filters(int(anchor), int(complement), row, float(cp_score)):
                 return
             source_group = str(template.get("source_group", "fallback")).strip().lower()
             if source_group == "fallback_cleaning":
@@ -5740,8 +6126,8 @@ def _fallback_candidates_for_lane(
         for (a, b), (_row, _cp_score, _evidence_source) in evidence_items:
             if fixed_anchor > 0 and fixed_complement > 0:
                 continue
-            text_a = _product_text_for_pid(int(a), context)
-            text_b = _product_text_for_pid(int(b), context)
+            text_a = pid_text_cache.get(int(a), "")
+            text_b = pid_text_cache.get(int(b), "")
             direct = bool(anchor_tokens) and bool(complement_tokens) and any(tok in text_a for tok in anchor_tokens) and any(
                 tok in text_b for tok in complement_tokens
             )
@@ -5766,173 +6152,16 @@ def _fallback_candidates_for_lane(
     return [(int(anchor), int(complement), row, str(source)) for _rk, anchor, complement, row, source in ranked]
 
 
-def _is_strong_personalized_third_choice(choice_payload: dict[str, object]) -> bool:
-    source = str(choice_payload.get("source", "")).strip().lower()
-    source_group = _source_group_from_source(source)
-    if source_group not in {"top_bundle", "copurchase_fallback"}:
-        return False
-    lane_name = str(choice_payload.get("lane", LANE_MEAL)).strip().lower() or LANE_MEAL
-    score_value = float(
-        choice_payload.get(
-            "final_stage_score",
-            choice_payload.get("effective_score", choice_payload.get("pool_score", choice_payload.get("personal_score", 0.0))),
-        )
-    )
-    if not _passes_choice_score_floor(lane_name, source, score_value):
-        return False
-    return bool(score_value >= float(PERSONALIZED_OPTIONAL_THIRD_MIN_SCORE))
-
-
-def _build_curated_fallback_pool(
-    context: PersonalizationContext,
-    bundle_lookup: dict[tuple[int, int], pd.Series],
-) -> list[dict[str, object]]:
-    entries = list(TOP_100_CURATED_FOOD_BUNDLES) + list(CURATED_CLEANING_FALLBACK_BUNDLES)
-    if not entries:
-        return []
-    pair_rows: list[tuple[int, int, pd.Series, str, str]] = []
-    for (a, b), row in bundle_lookup.items():
-        a_id = int(a)
-        b_id = int(b)
-        if a_id <= 0 or b_id <= 0 or a_id == b_id:
-            continue
-        pair_rows.append(
-            (
-                a_id,
-                b_id,
-                row,
-                _product_text_for_pid(a_id, context),
-                _product_text_for_pid(b_id, context),
-            )
-        )
-
-    ranked_candidates: dict[tuple[str, tuple[int, int]], dict[str, object]] = {}
-    for entry in entries:
-        lane_name = str(entry.get("lane", "")).strip().lower()
-        if lane_name not in ALL_LANE_ORDER:
-            continue
-        anchor_tokens = frozenset(_token_set(str(entry.get("anchor_hint", ""))))
-        complement_tokens = frozenset(_token_set(str(entry.get("complement_hint", ""))))
-        if not anchor_tokens or not complement_tokens:
-            continue
-        template_id = str(entry.get("id", "unknown")).strip() or "unknown"
-        source_group = str(entry.get("source_group", "fallback")).strip().lower()
-        if source_group == "fallback_cleaning":
-            source_name = f"fallback_cleaning:{lane_name}:{template_id}"
-        else:
-            source_name = f"fallback:{lane_name}:{template_id}"
-        template_priority = int(_safe_int(entry.get("priority", 9999), default=9999))
-        best_choice: tuple[tuple[int, int, float, float, int, int], int, int, pd.Series] | None = None
-        for a_id, b_id, row, text_a, text_b in pair_rows:
-            match_direct = bool(_text_has_any_hint(text_a, anchor_tokens) and _text_has_any_hint(text_b, complement_tokens))
-            match_inverse = bool(_text_has_any_hint(text_b, anchor_tokens) and _text_has_any_hint(text_a, complement_tokens))
-            if not match_direct and not match_inverse:
-                continue
-            orientations: list[tuple[int, int, int]] = []
-            if match_direct:
-                orientations.append((a_id, b_id, 0))
-            if match_inverse:
-                orientations.append((b_id, a_id, 1))
-            for anchor_id, complement_id, orientation_rank in orientations:
-                if not _anchor_allowed_for_lane(anchor_id, lane_name, context, row=row):
-                    continue
-                cp_score = _safe_float(row.get("purchase_score", row.get("copurchase_score", 0.0)), default=0.0)
-                final_score = _safe_float(row.get("final_score", row.get("new_final_score", 0.0)), default=0.0)
-                rank_key = (
-                    int(template_priority),
-                    int(orientation_rank),
-                    -float(final_score),
-                    -float(cp_score),
-                    int(anchor_id),
-                    int(complement_id),
-                )
-                if best_choice is None or rank_key < best_choice[0]:
-                    best_choice = (rank_key, int(anchor_id), int(complement_id), row)
-        if best_choice is None:
-            continue
-        _rank_key, anchor_id, complement_id, row = best_choice
-        final_score = _safe_float(row.get("final_score", row.get("new_final_score", 0.0)), default=0.0)
-        cp_score_raw = _safe_float(
-            row.get(
-                "purchase_score",
-                row.get("copurchase_score", row.get("co_purchase_score", row.get("bundle_purchase_score", 0.0))),
-            ),
-            default=0.0,
-        )
-        pair_count_raw = int(
-            _safe_int(
-                row.get(
-                    "pair_count",
-                    row.get("co_purchase_count", row.get("pair_co_purchase_count", row.get("bundle_pair_count", 0))),
-                ),
-                default=0,
-            )
-        )
-        # Real bundle views sometimes omit copurchase evidence fields; use a deterministic
-        # quality prior from final score so curated fallback remains usable.
-        cp_score = float(cp_score_raw if cp_score_raw > 0.0 else max(30.0, final_score * 0.45))
-        pair_count = int(pair_count_raw if pair_count_raw > 0 else max(12, int(round(final_score / 8.0))))
-        lane_fit_score = 0.82 if lane_name == LANE_MEAL else 0.88
-        template_strength = max(0.0, min(1.0, final_score / 100.0))
-        category_strength = max(0.0, min(1.0, (0.6 * template_strength) + 0.3))
-        pair_strength = semantics.STRENGTH_STRONG
-        if cp_score < float(STRICT_COPURCHASE_MIN) or pair_count < int(STRICT_PAIR_COUNT_MIN):
-            pair_strength = semantics.STRENGTH_WEAK
-        # Curated fallback is only used after personalized selection, so keep a stable
-        # calibrated floor high enough to pass final score-floor checks.
-        base_score = float(max(0.0, 1.05 + (0.62 * (final_score / 100.0)) + (0.28 * (cp_score / 100.0))))
-        if lane_name == LANE_NONFOOD:
-            base_score -= 0.04
-        candidate = {
-            "anchor": int(anchor_id),
-            "complement": int(complement_id),
-            "bundle_row": row,
-            "source": source_name,
-            "lane": lane_name,
-            "pair_count": int(pair_count),
-            "cp_score": float(cp_score),
-            "lane_fit_score": float(lane_fit_score),
-            "template_strength": float(template_strength),
-            "category_strength": float(category_strength),
-            "recipe_compat": 0.26,
-            "prior_bonus": 0.08,
-            "pair_strength": str(pair_strength),
-            "pool_score": float(base_score),
-            "effective_score": float(base_score),
-            "effective_score_rank": float(base_score),
-            "serving_tier_hint": "tier2_safe_fallback",
-            "fallback_motif_key": f"curated:{template_id}",
-        }
-        pair_key = _pair_key(anchor_id, complement_id)
-        dedupe_key = (str(lane_name), pair_key)
-        current = ranked_candidates.get(dedupe_key)
-        if current is None or float(candidate["effective_score"]) > float(current.get("effective_score", -1e9)):
-            ranked_candidates[dedupe_key] = candidate
-
-    ordered = list(ranked_candidates.values())
-    ordered.sort(
-        key=lambda cand: (
-            _source_priority_rank(str(cand.get("source", ""))),
-            -float(cand.get("effective_score", 0.0)),
-            int(_safe_int(cand.get("anchor"), default=-1)),
-            int(_safe_int(cand.get("complement"), default=-1)),
-        )
-    )
-    return ordered
-
-
 def _swap_pair_fields(display: dict[str, object]) -> None:
     swap_cols = [
         ("product_a", "product_b"),
         ("product_a_name", "product_b_name"),
         ("product_a_price", "product_b_price"),
-        ("purchase_price_a", "purchase_price_b"),
-        ("purchase_price_missing_a", "purchase_price_missing_b"),
-        ("purchase_price_a_sar", "purchase_price_b_sar"),
         ("price_a_sar", "price_b_sar"),
         ("price_after_discount_a", "price_after_discount_b"),
         ("price_after_a_sar", "price_after_b_sar"),
         ("discount_a", "discount_b"),
+        ("discount_pred_a", "discount_pred_b"),
         ("product_a_picture", "product_b_picture"),
         ("category_a", "category_b"),
         ("product_family_a", "product_family_b"),
@@ -5947,21 +6176,7 @@ def _swap_pair_fields(display: dict[str, object]) -> None:
 
 
 def _force_item2_free(display: dict[str, object]) -> None:
-    price_a = _safe_float(display.get("product_a_price"), default=0.0)
-    purchase_a = _safe_float(display.get("purchase_price_a"), default=price_a)
-    if purchase_a <= 0:
-        purchase_a = max(0.0, price_a)
-    final_paid = margin_discounted_sale_price(price_a, purchase_a, FIXED_MARGIN_DISCOUNT_PCT)
-
     display["free_product"] = "product_b"
-    display["paid_product"] = "product_a"
-    display["discount_a"] = float(FIXED_MARGIN_DISCOUNT_PCT)
-    display["discount_b"] = float(FIXED_MARGIN_DISCOUNT_PCT)
-    display["purchase_price_a"] = round(float(purchase_a), 2)
-    display["purchase_price_a_sar"] = f"{purchase_a:,.2f}"
-    display["price_after_discount_a"] = round(float(final_paid), 2)
-    display["price_after_a_sar"] = f"{final_paid:,.2f}"
-    display["paid_item_final_price"] = round(float(final_paid), 2)
     if "price_after_discount_b" in display:
         display["price_after_discount_b"] = 0.0
     if "price_after_b_sar" in display:
@@ -6056,10 +6271,12 @@ def _maybe_swap_to_make_free_item_cheaper(
     if float(price_b) <= float(price_a):
         _force_item2_free(display)
         return
+    if not _swap_preserves_lane_semantics(display, lane, context):
+        _force_item2_free(display)
+        return
     _swap_pair_fields(display)
     display["swapped"] = True
     display["swap_reason"] = "make_free_item_cheaper"
-    del lane, context
     _force_item2_free(display)
 
 
@@ -6082,26 +6299,12 @@ def _display_dict_for_choice(choice: dict[str, object], context: Personalization
         display["product_a_name"] = str(context.product_name_by_id.get(anchor, display.get("product_a_name", f"Product {anchor}")))
         display["product_b_name"] = str(context.product_name_by_id.get(complement, display.get("product_b_name", f"Product {complement}")))
 
-    row_price_a = _safe_float(display.get("product_a_price"), default=0.0)
-    row_price_b = _safe_float(display.get("product_b_price"), default=0.0)
-    price_a = float(row_price_a if row_price_a > 0 else context.product_price_by_id.get(anchor, 0.0))
-    price_b = float(row_price_b if row_price_b > 0 else context.product_price_by_id.get(complement, 0.0))
-    purchase_a = _safe_float(display.get("purchase_price_a"), default=price_a)
-    purchase_b = _safe_float(display.get("purchase_price_b"), default=price_b)
-    if purchase_a <= 0:
-        purchase_a = max(0.0, price_a)
-        display["purchase_price_missing_a"] = 1
-    if purchase_b <= 0:
-        purchase_b = max(0.0, price_b)
-        display["purchase_price_missing_b"] = 1
+    price_a = float(context.product_price_by_id.get(anchor, _safe_float(display.get("product_a_price"), default=0.0)))
+    price_b = float(context.product_price_by_id.get(complement, _safe_float(display.get("product_b_price"), default=0.0)))
     display["product_a_price"] = round(price_a, 2)
     display["product_b_price"] = round(price_b, 2)
-    display["purchase_price_a"] = round(float(purchase_a), 2)
-    display["purchase_price_b"] = round(float(purchase_b), 2)
     display["price_a_sar"] = f"{price_a:,.2f}"
     display["price_b_sar"] = f"{price_b:,.2f}"
-    display["purchase_price_a_sar"] = f"{purchase_a:,.2f}"
-    display["purchase_price_b_sar"] = f"{purchase_b:,.2f}"
     _force_item2_free(display)
     return display
 
@@ -6139,79 +6342,6 @@ def _candidate_pair_key(candidate: dict[str, object]) -> tuple[int, int]:
     )
 
 
-def _candidate_pair_text_features(
-    candidate: dict[str, object],
-    context: PersonalizationContext,
-    pair_feature_cache: dict[tuple[int, int], dict[str, bool]] | None = None,
-) -> dict[str, bool]:
-    pair_key = _candidate_pair_key(candidate)
-    if pair_feature_cache is not None:
-        cached = pair_feature_cache.get(pair_key)
-        if cached is not None:
-            return cached
-    (
-        _anchor,
-        _complement,
-        name_a,
-        name_b,
-        cat_a,
-        cat_b,
-        fam_a,
-        fam_b,
-        _pair_row,
-    ) = _candidate_pair_fields(candidate, context)
-    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
-    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
-    features = {
-        "contains_tuna": bool(
-            _text_has_any_hint(text_a, FINAL_QUALITY_TUNA_HINTS)
-            or _text_has_any_hint(text_b, FINAL_QUALITY_TUNA_HINTS)
-        ),
-        "meal_dominant_text": bool(_is_meal_dominant_pair_text(text_a, text_b)),
-    }
-    if pair_feature_cache is not None:
-        pair_feature_cache[pair_key] = features
-    return features
-
-
-def _candidate_contains_tuna(
-    candidate: dict[str, object],
-    context: PersonalizationContext,
-    pair_feature_cache: dict[tuple[int, int], dict[str, bool]] | None = None,
-) -> bool:
-    return bool(
-        _candidate_pair_text_features(candidate, context, pair_feature_cache=pair_feature_cache).get("contains_tuna", False)
-    )
-
-
-def _final_stage_repetition_penalty(pair_frequency: int) -> float:
-    freq = max(0, int(pair_frequency))
-    if freq <= 0:
-        return 0.0
-    return float(FINAL_STAGE_REPETITION_PENALTY * (float(freq) ** float(FINAL_STAGE_REPETITION_PENALTY_POWER)))
-
-
-def _candidate_final_stage_score(
-    candidate: dict[str, object],
-    context: PersonalizationContext,
-    global_pair_exposure: dict[tuple[int, int], int],
-    pair_feature_cache: dict[tuple[int, int], dict[str, bool]] | None = None,
-) -> float:
-    base_score = float(candidate.get("effective_score", candidate.get("pool_score", candidate.get("personal_score", 0.0))))
-    pair_key = _candidate_pair_key(candidate)
-    pair_frequency = int(global_pair_exposure.get(pair_key, 0))
-    repetition_penalty = _final_stage_repetition_penalty(pair_frequency)
-    tuna_penalty = float(
-        TUNA_FINAL_STAGE_PENALTY
-        if _candidate_contains_tuna(candidate, context, pair_feature_cache=pair_feature_cache)
-        else 0.0
-    )
-    candidate["final_stage_pair_frequency"] = int(pair_frequency)
-    candidate["final_stage_repetition_penalty"] = float(repetition_penalty)
-    candidate["final_stage_tuna_penalty"] = float(tuna_penalty)
-    return float(base_score - repetition_penalty - tuna_penalty)
-
-
 def _candidate_effective_score(
     candidate: dict[str, object],
     context: PersonalizationContext,
@@ -6221,7 +6351,6 @@ def _candidate_effective_score(
     global_motif_family_exposure: dict[str, int] | None = None,
     global_family_pattern_exposure: dict[str, int] | None = None,
     global_bundle_shape_exposure: dict[str, int] | None = None,
-    pair_feature_cache: dict[tuple[int, int], dict[str, bool]] | None = None,
 ) -> float:
     score = float(candidate.get("pool_score", candidate.get("personal_score", 0.0)))
     source_group = _source_group_from_source(str(candidate.get("source", "")))
@@ -6282,14 +6411,21 @@ def _candidate_effective_score(
         threshold=EXPOSURE_SURGE_THRESHOLD_SHAPE,
     )
     if lane == LANE_MEAL:
-        pair_features = _candidate_pair_text_features(
-            candidate,
-            context,
-            pair_feature_cache=pair_feature_cache,
-        )
+        (
+            _anchor,
+            _complement,
+            name_a,
+            name_b,
+            cat_a,
+            cat_b,
+            fam_a,
+            fam_b,
+            _pair_row,
+        ) = _candidate_pair_fields(candidate, context)
+        text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+        text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
         meal_dominant_candidate = bool(
-            _is_meal_dominant_motif_signature(motif_family_signature)
-            or bool(pair_features.get("meal_dominant_text", False))
+            _is_meal_dominant_motif_signature(motif_family_signature) or _is_meal_dominant_pair_text(text_a, text_b)
         )
         if meal_dominant_candidate:
             dominant_exposure = max(0, max(motif_family_exposure, family_pattern_exposure, bundle_shape_exposure))
@@ -6366,129 +6502,208 @@ def _candidate_effective_score(
     return float(score)
 
 
-def _select_final_candidates_for_person(
-    candidates: list[dict[str, object]],
+def _candidate_is_strong_finalist(candidate: dict[str, object]) -> bool:
+    lane = str(candidate.get("lane", "")).strip().lower()
+    strength = str(candidate.get("pair_strength", "")).strip()
+    cp_score = float(candidate.get("cp_score", 0.0))
+    pair_count = int(_safe_int(candidate.get("pair_count"), default=0))
+    recipe = float(candidate.get("recipe_compat", 0.0))
+    template_strength = float(candidate.get("template_strength", 0.0))
+    category_strength = float(candidate.get("category_strength", 0.0))
+    lane_fit = float(candidate.get("lane_fit_score", 0.0))
+    prior_bonus = float(candidate.get("prior_bonus", 0.0))
+    source = str(candidate.get("source", "")).strip().lower()
+
+    if strength == semantics.STRENGTH_TRASH:
+        return False
+    if lane == LANE_MEAL:
+        if strength == semantics.STRENGTH_STRONG:
+            return True
+        return bool(
+            strength == semantics.STRENGTH_STAPLE
+            and cp_score >= 20.0
+            and pair_count >= 8
+            and (recipe >= 0.14 or template_strength >= 0.6 or category_strength >= 0.6)
+        )
+    if lane == LANE_SNACK:
+        if strength == semantics.STRENGTH_STRONG:
+            return True
+        return bool(
+            strength == semantics.STRENGTH_STAPLE
+            and template_strength >= 0.75
+            and cp_score >= 22.0
+            and pair_count >= 8
+            and lane_fit >= 0.7
+        )
+    if lane == LANE_OCCASION:
+        if strength == semantics.STRENGTH_STRONG:
+            return True
+        return bool(
+            strength == semantics.STRENGTH_STAPLE
+            and cp_score >= 24.0
+            and pair_count >= 8
+            and lane_fit >= 0.8
+            and (template_strength >= 0.75 or prior_bonus > 0.0 or category_strength >= 0.6)
+        )
+    return False
+
+
+def _candidate_is_fill_finalist(candidate: dict[str, object]) -> bool:
+    lane = str(candidate.get("lane", "")).strip().lower()
+    if lane == LANE_NONFOOD:
+        return True
+    strength = str(candidate.get("pair_strength", "")).strip()
+    cp_score = float(candidate.get("cp_score", 0.0))
+    pair_count = int(_safe_int(candidate.get("pair_count"), default=0))
+    lane_fit = float(candidate.get("lane_fit_score", 0.0))
+    template_strength = float(candidate.get("template_strength", 0.0))
+    category_strength = float(candidate.get("category_strength", 0.0))
+    prior_bonus = float(candidate.get("prior_bonus", 0.0))
+
+    if strength == semantics.STRENGTH_TRASH:
+        return False
+    if lane == LANE_MEAL:
+        return bool(strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE} and cp_score >= 16.0 and pair_count >= 5)
+    if lane == LANE_SNACK:
+        return bool(
+            strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE}
+            and cp_score >= 18.0
+            and pair_count >= 6
+            and lane_fit >= 0.60
+            and (template_strength >= 0.65 or category_strength >= 0.65)
+        )
+    if lane == LANE_OCCASION:
+        return bool(
+            strength in {semantics.STRENGTH_STRONG, semantics.STRENGTH_STAPLE}
+            and cp_score >= 20.0
+            and pair_count >= 6
+            and lane_fit >= 0.70
+            and (template_strength >= 0.65 or prior_bonus > 0.0)
+        )
+    return _candidate_is_strong_finalist(candidate)
+
+
+def _choose_candidate_first_food_trio(
+    candidate_pool: dict[tuple[str, int, int, str], dict[str, object]],
     context: PersonalizationContext,
     global_pair_exposure: dict[tuple[int, int], int],
-    serving_telemetry: ServingTelemetry | None = None,
-    max_bundles: int = MAX_BUNDLES_PER_PERSON,
-    pair_feature_cache: dict[tuple[int, int], dict[str, bool]] | None = None,
-    timing_bucket: dict[str, float] | None = None,
+    global_template_exposure: dict[str, int],
+    global_fallback_motif_exposure: dict[str, int] | None = None,
+    global_motif_family_exposure: dict[str, int] | None = None,
+    global_family_pattern_exposure: dict[str, int] | None = None,
+    global_bundle_shape_exposure: dict[str, int] | None = None,
 ) -> list[dict[str, object]]:
-    scoring_start = time.perf_counter()
-    ranked_candidates: list[dict[str, object]] = []
-    for candidate in candidates:
-        enriched = dict(candidate)
-        final_stage_score = _candidate_final_stage_score(
-            enriched,
-            context=context,
-            global_pair_exposure=global_pair_exposure,
-            pair_feature_cache=pair_feature_cache,
-        )
-        enriched["final_stage_score"] = float(final_stage_score)
-        ranked_candidates.append(enriched)
-    if timing_bucket is not None:
-        timing_bucket["final_stage_scoring_ms"] = float(
-            timing_bucket.get("final_stage_scoring_ms", 0.0) + (time.perf_counter() - scoring_start) * 1000.0
-        )
-
-    sort_start = time.perf_counter()
-    ranked_candidates.sort(
-        key=lambda cand: (
-            -float(cand.get("final_stage_score", cand.get("effective_score", 0.0))),
-            -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
-            -float(cand.get("effective_score", 0.0)),
-            _source_priority_rank(str(cand.get("source", ""))),
-            int(_safe_int(cand.get("pair_count"), default=0)) * -1,
-            int(_safe_int(cand.get("complement"), default=-1)),
-            int(_safe_int(cand.get("anchor"), default=-1)),
-        )
-    )
-    if timing_bucket is not None:
-        timing_bucket["final_stage_sort_ms"] = float(
-            timing_bucket.get("final_stage_sort_ms", 0.0) + (time.perf_counter() - sort_start) * 1000.0
-        )
-        timing_bucket["final_stage_candidates"] = float(
-            timing_bucket.get("final_stage_candidates", 0.0) + float(len(ranked_candidates))
-        )
-
-    select_loop_start = time.perf_counter()
-    quality_check_ms = 0.0
-    selected: list[dict[str, object]] = []
-    selected_pairs: set[tuple[int, int]] = set()
-    selected_item_ids: set[int] = set()
-    selected_fallback_motif_counts: dict[str, int] = {}
-    cleaning_count = 0
-
-    for candidate in ranked_candidates:
-        anchor_id = int(_safe_int(candidate.get("anchor"), default=-1))
-        complement_id = int(_safe_int(candidate.get("complement"), default=-1))
-        if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
-            continue
-        lane_name = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
-        row = candidate.get("bundle_row")
-        pair_row = row if isinstance(row, pd.Series) else None
-
-        quality_start = time.perf_counter()
-        final_quality_reject = _final_human_quality_reject_reason(
-            anchor_id,
-            complement_id,
-            lane_name,
-            context,
-            pair_row=pair_row,
-        )
-        quality_check_ms += (time.perf_counter() - quality_start) * 1000.0
-        if final_quality_reject:
-            _record_serving_telemetry(serving_telemetry, lane_name, "rejected_final_human_quality")
-            continue
-
-        pair_key = _pair_key(anchor_id, complement_id)
-        if pair_key in selected_pairs:
-            continue
-
-        # Hard rule: once an item is selected for a person, it cannot be reused.
-        if anchor_id in selected_item_ids or complement_id in selected_item_ids:
-            _record_serving_telemetry(serving_telemetry, lane_name, "rejected_item_reuse")
-            continue
-
-        is_cleaning = _is_household_bundle(candidate, context)
-        if is_cleaning and cleaning_count >= MAX_CLEANING_BUNDLES_PER_PERSON:
-            continue
-
-        source_group = _source_group_from_source(str(candidate.get("source", "")))
-        fallback_motif = str(candidate.get("fallback_motif_key", "")).strip()
-        if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
-            current_motif_count = int(selected_fallback_motif_counts.get(fallback_motif, 0))
-            if current_motif_count >= FALLBACK_MOTIF_REPEAT_CAP_PER_PERSON:
-                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_motif_repeat")
+    def _lane_candidates(filter_fn) -> dict[str, list[dict[str, object]]]:
+        lane_out: dict[str, list[dict[str, object]]] = {lane: [] for lane in FOOD_LANE_ORDER}
+        for candidate in candidate_pool.values():
+            lane = str(candidate.get("lane", "")).strip().lower()
+            if lane not in FOOD_LANE_ORDER:
                 continue
-            if fallback_motif in EVAP_REPETITIVE_FALLBACK_MOTIFS:
-                evap_count = sum(
-                    int(selected_fallback_motif_counts.get(motif_key, 0))
-                    for motif_key in EVAP_REPETITIVE_FALLBACK_MOTIFS
+            if not filter_fn(candidate):
+                continue
+            enriched = dict(candidate)
+            enriched["effective_score"] = _candidate_effective_score(
+                enriched,
+                context,
+                global_pair_exposure=global_pair_exposure,
+                global_template_exposure=global_template_exposure,
+                global_fallback_motif_exposure=global_fallback_motif_exposure,
+                global_motif_family_exposure=global_motif_family_exposure,
+                global_family_pattern_exposure=global_family_pattern_exposure,
+                global_bundle_shape_exposure=global_bundle_shape_exposure,
+            )
+            lane_out[lane].append(enriched)
+        for lane in FOOD_LANE_ORDER:
+            lane_out[lane].sort(
+                key=lambda cand: (
+                    -float(cand.get("effective_score", 0.0)),
+                    _source_priority_rank(str(cand.get("source", ""))),
+                    int(_safe_int(cand.get("complement"), default=-1)),
+                    int(_safe_int(cand.get("anchor"), default=-1)),
                 )
-                if evap_count >= FALLBACK_EVAP_MOTIF_CAP_PER_PERSON:
-                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_evap_motif_cap")
-                    continue
+            )
+            lane_out[lane] = lane_out[lane][:TOP_TRIO_CANDIDATES_PER_LANE]
+        return lane_out
 
-        selected.append(candidate)
-        selected_pairs.add(pair_key)
-        selected_item_ids.add(anchor_id)
-        selected_item_ids.add(complement_id)
-        if is_cleaning:
-            cleaning_count += 1
-        if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
-            selected_fallback_motif_counts[fallback_motif] = int(selected_fallback_motif_counts.get(fallback_motif, 0)) + 1
-        if len(selected) >= int(max_bundles):
+    def _best_combo(filter_fn) -> list[dict[str, object]]:
+        lane_candidates = _lane_candidates(filter_fn)
+        if any(not lane_candidates[lane] for lane in FOOD_LANE_ORDER):
+            return []
+        best_score = float("-inf")
+        best_combo: list[dict[str, object]] = []
+        for meal_choice in lane_candidates[LANE_MEAL]:
+            for snack_choice in lane_candidates[LANE_SNACK]:
+                for occasion_choice in lane_candidates[LANE_OCCASION]:
+                    combo = [meal_choice, snack_choice, occasion_choice]
+                    anchors = [int(_safe_int(item.get("anchor"), default=-1)) for item in combo]
+                    if len({anchor for anchor in anchors if anchor > 0}) != 3:
+                        continue
+                    pair_keys = [_candidate_pair_key(item) for item in combo]
+                    if len(set(pair_keys)) != 3:
+                        continue
+                    template_signatures = [_template_signature(item, context) for item in combo]
+                    score = sum(float(item.get("effective_score", 0.0)) for item in combo)
+                    duplicate_sig_penalty = len(template_signatures) - len(set(template_signatures))
+                    if duplicate_sig_penalty > 0:
+                        score -= 0.10 * float(duplicate_sig_penalty)
+                    combo_rank = (
+                        float(score),
+                        -sum(_source_priority_rank(str(item.get("source", ""))) for item in combo),
+                        -sum(int(_safe_int(item.get("pair_count"), default=0)) for item in combo),
+                    )
+                    if combo_rank > (best_score, float("-inf"), float("-inf")):
+                        best_score = combo_rank[0]
+                        best_combo = combo
+        return best_combo
+
+    combo = _best_combo(_candidate_is_strong_finalist)
+    if combo:
+        return combo
+    combo = _best_combo(_candidate_is_fill_finalist)
+    if combo:
+        return combo
+
+    used_anchors: set[int] = set()
+    used_pairs: set[tuple[int, int]] = set()
+    selected: list[dict[str, object]] = []
+    for lane in FOOD_LANE_ORDER:
+        lane_candidates: list[dict[str, object]] = []
+        for candidate in candidate_pool.values():
+            if str(candidate.get("lane", "")).strip().lower() != lane:
+                continue
+            enriched = dict(candidate)
+            enriched["effective_score"] = _candidate_effective_score(
+                enriched,
+                context,
+                global_pair_exposure=global_pair_exposure,
+                global_template_exposure=global_template_exposure,
+                global_fallback_motif_exposure=global_fallback_motif_exposure,
+                global_motif_family_exposure=global_motif_family_exposure,
+                global_family_pattern_exposure=global_family_pattern_exposure,
+                global_bundle_shape_exposure=global_bundle_shape_exposure,
+            )
+            lane_candidates.append(enriched)
+        lane_candidates.sort(
+            key=lambda cand: (
+                -float(cand.get("effective_score", 0.0)),
+                _source_priority_rank(str(cand.get("source", ""))),
+                int(_safe_int(cand.get("complement"), default=-1)),
+                int(_safe_int(cand.get("anchor"), default=-1)),
+            )
+        )
+        picked = None
+        for candidate in lane_candidates:
+            anchor_id = int(_safe_int(candidate.get("anchor"), default=-1))
+            pair_key = _candidate_pair_key(candidate)
+            if anchor_id <= 0 or anchor_id in used_anchors or pair_key in used_pairs:
+                continue
+            picked = candidate
             break
-
-    if timing_bucket is not None:
-        timing_bucket["final_stage_quality_check_ms"] = float(
-            timing_bucket.get("final_stage_quality_check_ms", 0.0) + quality_check_ms
-        )
-        timing_bucket["final_stage_select_loop_ms"] = float(
-            timing_bucket.get("final_stage_select_loop_ms", 0.0) + (time.perf_counter() - select_loop_start) * 1000.0
-        )
+        if picked is None:
+            return []
+        selected.append(picked)
+        used_anchors.add(int(_safe_int(picked.get("anchor"), default=-1)))
+        used_pairs.add(_candidate_pair_key(picked))
     return selected
 
 
@@ -6877,8 +7092,6 @@ def _write_person_quality_artifact(
     anchor_in_history = sum(1 for r in bundle_rows if bool(r.get("anchor_in_history", False)))
     history_matches = [float(r.get("history_match_count", 0)) for r in bundle_rows]
     overall_telemetry = serving_telemetry.overall if serving_telemetry is not None else {}
-    timing_totals_ms = serving_telemetry.timings_ms if serving_telemetry is not None else {}
-    profile_timing_rows = serving_telemetry.profile_timings_ms if serving_telemetry is not None else []
 
     non_food_pair_count = 0
     same_family_pair_count = 0
@@ -6957,9 +7170,6 @@ def _write_person_quality_artifact(
             str(lane): {str(key): int(value) for key, value in sorted(counts.items())}
             for lane, counts in sorted((serving_telemetry.by_lane if serving_telemetry is not None else {}).items())
         },
-        "serving_timing_totals_ms": {
-            str(key): round(float(value), 3) for key, value in sorted(timing_totals_ms.items())
-        },
         "max_anchor_count": 0,
         "anchor_reuse_histogram": {},
         "people_refreshed_for_run_id": str(run_id or ""),
@@ -6983,16 +7193,6 @@ def _write_person_quality_artifact(
         payload["template_dup_rate"] = round(float(dup_count / max(1, len(top))), 4)
         payload["unique_anchor_count_top10"] = int(len({x for x in anchors if x > 0}))
         payload["unique_family_count_top10"] = int(len({f for f in families if f}))
-    if profile_timing_rows:
-        totals = sorted(float(row.get("profile_total_ms", 0.0)) for row in profile_timing_rows if float(row.get("profile_total_ms", 0.0)) > 0.0)
-        payload["serving_timing_profile_summary_ms"] = {
-            "count": int(len(totals)),
-            "avg": round(float(sum(totals) / len(totals)), 3) if totals else 0.0,
-            "p50": round(float(_percentile(totals, 0.50)), 3) if totals else 0.0,
-            "p90": round(float(_percentile(totals, 0.90)), 3) if totals else 0.0,
-            "p95": round(float(_percentile(totals, 0.95)), 3) if totals else 0.0,
-            "max": round(float(max(totals)), 3) if totals else 0.0,
-        }
 
     out_dir = get_paths(project_root=base_dir).output_dir
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -7010,20 +7210,25 @@ def build_recommendations_for_profiles(
     run_id: str | None = None,
     rng_salt: str | None = None,
 ) -> list[dict[str, object]]:
+    global _LAST_SERVING_PROFILE_METRICS
     if not profiles or max_people <= 0:
+        _LAST_SERVING_PROFILE_METRICS = {}
         return []
 
+    overall_started = time.perf_counter()
     active_base_dir = base_dir or get_paths().project_root
     bundle_data = bundles_df if bundles_df is not None else pd.DataFrame()
     bundle_lookup = _build_bundle_lookup(bundle_data)
-    bundle_pairs_by_product = _build_bundle_pairs_by_product(bundle_lookup)
     top_bundle_rows_by_anchor = _build_top_bundle_rows_by_anchor(bundle_data)
     context = load_personalization_context(active_base_dir)
-    profile_mode_enabled = _serving_profile_enabled()
-    curated_fallback_pool = _build_curated_fallback_pool(context, bundle_lookup)
 
     recommendations: list[dict[str, object]] = []
     feedback_lookup = build_pair_multiplier_lookup(active_base_dir)
+    order_pool = load_order_pool(active_base_dir)
+    profile_queue = list(profiles[:max_people])
+    seen_signatures = {tuple(sorted(int(pid) for pid in p.history_product_ids)) for p in profile_queue}
+    resample_budget = max(10, max_people * 4)
+    idx = 0
     global_anchor_counts: dict[int, int] = {}
     global_anchor_lane_counts: dict[tuple[str, int], int] = {}
     global_duplicate_pair_count_blocked = 0
@@ -7036,28 +7241,33 @@ def build_recommendations_for_profiles(
     global_motif_family_exposure: dict[str, int] = {}
     global_family_pattern_exposure: dict[str, int] = {}
     global_bundle_shape_exposure: dict[str, int] = {}
-    timing_totals_ms: dict[str, float] = {}
-    profile_timing_rows: list[dict[str, float]] = []
+    profiling = _ServingProfileRecorder(enabled=_serving_profiling_enabled())
+    profiled_nonfood_anchors = [
+        int(pid)
+        for pid in top_bundle_rows_by_anchor.keys()
+        if int(pid) > 0 and _is_nonfood_product(int(pid), context)
+    ]
 
-    for profile in profiles[:max_people]:
-        profile_start = time.perf_counter()
-        profile_timing_ms: dict[str, float] = {}
-        stage_start = time.perf_counter()
+    while idx < len(profile_queue) and len(recommendations) < max_people:
+        profile_started = time.perf_counter()
+        profile = profile_queue[idx]
+        idx += 1
+        prep_started = time.perf_counter()
         profile_seed_key = _profile_seed_key(profile)
         profile_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=rng_salt)
         nonfood_gate_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=f"{rng_salt or ''}::nonfood_gate")
-        include_nonfood = bool(nonfood_gate_rng.random() < NONFOOD_INCLUDE_RATE)
+        include_nonfood_default = bool(nonfood_gate_rng.random() < NONFOOD_INCLUDE_RATE)
         lane_ranked = _rank_anchors_by_lane(profile, context, profile_rng, active_base_dir)
         seed_anchors = _pick_three_lane_anchors(lane_ranked, profile_rng) or {}
-        profile_timing_ms["profile_prep_ms"] = float((time.perf_counter() - stage_start) * 1000.0)
 
         used_complements: set[int] = set()
         used_complement_families: dict[str, int] = {}
+        used_anchors_for_person: set[int] = set()
+        selected_themes: set[str] = set()
+        selected_pair_fingerprints: set[tuple[str, str]] = set()
+        selected_lane_groups: dict[str, set[str]] = {}
         bundles_for_person: list[dict[str, object]] = []
         used_bundle_keys_for_person: set[tuple[int, int]] = set()
-        history_ids_for_profile = {int(pid) for pid in profile.history_product_ids if int(pid) > 0}
-        preferred_brand_by_family = _profile_brand_preference_by_family(profile, context)
-        pair_feature_cache: dict[tuple[int, int], dict[str, bool]] = {}
 
         lane_candidate_ids: dict[str, list[int]] = {}
         all_ranked_ids: list[int] = []
@@ -7080,14 +7290,12 @@ def build_recommendations_for_profiles(
                 continue
             if pid_int not in nonfood_anchors:
                 nonfood_anchors.append(pid_int)
-        for pid in top_bundle_rows_by_anchor.keys():
+        for pid in profiled_nonfood_anchors:
             if len(nonfood_anchors) >= TOP10_ANCHOR_SIZE:
                 break
-            pid_int = int(pid)
-            if pid_int <= 0 or pid_int in nonfood_anchors:
+            if int(pid) in nonfood_anchors:
                 continue
-            if _is_nonfood_product(pid_int, context):
-                nonfood_anchors.append(pid_int)
+            nonfood_anchors.append(int(pid))
         if not nonfood_anchors:
             for pid in context.non_food_ids:
                 if len(nonfood_anchors) >= TOP10_ANCHOR_SIZE:
@@ -7098,6 +7306,7 @@ def build_recommendations_for_profiles(
         lane_candidate_ids[LANE_NONFOOD] = nonfood_anchors
 
         candidate_lanes = [LANE_MEAL, LANE_SNACK, LANE_OCCASION]
+        profiling.add_stage("profile_preparation", time.perf_counter() - prep_started)
 
         def _finalize_choice(
             lane_name: str,
@@ -7108,24 +7317,23 @@ def build_recommendations_for_profiles(
         ) -> tuple[dict[str, object] | None, int]:
             selected_anchor_id = _safe_int(choice_payload.get("anchor"), default=-1)
             selected_complement_id = _safe_int(choice_payload.get("complement"), default=-1)
-            pricing_start = time.perf_counter()
             display_dict = _display_dict_for_choice(choice_payload, context=context)
             _maybe_swap_to_make_free_item_cheaper(display_dict, lane=lane_name, context=context)
-            profile_timing_ms["pricing_validation_ms"] = float(
-                profile_timing_ms.get("pricing_validation_ms", 0.0) + (time.perf_counter() - pricing_start) * 1000.0
-            )
             if row_to_record is not None:
                 bundle_rec_local = row_to_record(pd.Series(display_dict))
             else:
                 bundle_rec_local = display_dict
 
-            history_set_local = history_ids_for_profile
+            history_set_local = {int(pid) for pid in profile.history_product_ids}
             a_id = _safe_int(bundle_rec_local.get("product_a"), default=-1)
             b_id = _safe_int(bundle_rec_local.get("product_b"), default=-1)
             fam_a = str(context.product_family_by_id.get(a_id, "")).strip().lower()
             fam_b = str(context.product_family_by_id.get(b_id, "")).strip().lower()
             a_nonfood = _is_nonfood_product(a_id, context)
             b_nonfood = _is_nonfood_product(b_id, context)
+            sanity_reject = _bundle_sanity_reject_reason(a_id, b_id, lane_name, context)
+            if sanity_reject:
+                return None, local_dup_counter
             if lane_name in FOOD_LANE_ORDER and (a_nonfood or b_nonfood):
                 return None, local_dup_counter
             if lane_name == LANE_NONFOOD and not (a_nonfood and b_nonfood):
@@ -7148,14 +7356,9 @@ def build_recommendations_for_profiles(
             bundle_rec_local["anchor_product_id"] = int(selected_anchor_id if selected_anchor_id > 0 else a_id)
             bundle_rec_local["complement_product_id"] = int(selected_complement_id if selected_complement_id > 0 else b_id)
             origin_raw = str(choice_payload.get("source", "copurchase_fallback"))
-            serving_tier_hint = str(choice_payload.get("serving_tier_hint", "tier1_personalized")).strip().lower()
-            score_floor_pass = _passes_choice_score_floor(lane_name, origin_raw, float(score_value))
-            if not score_floor_pass:
-                if serving_tier_hint == "tier2_safe_fallback":
-                    _record_serving_telemetry(serving_telemetry, lane_name, "score_floor_relaxed_fill")
-                else:
-                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_score_floor")
-                    return None, local_dup_counter
+            if not _passes_choice_score_floor(lane_name, origin_raw, float(score_value)):
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_score_floor")
+                return None, local_dup_counter
             origin_group = _source_group_from_source(origin_raw)
             if origin_group in {"top_bundle", "copurchase_fallback", "fallback_food", "fallback_cleaning"}:
                 origin = origin_group
@@ -7163,7 +7366,6 @@ def build_recommendations_for_profiles(
                 origin = origin_raw
             bundle_rec_local["recommendation_origin"] = origin
             bundle_rec_local["recommendation_origin_raw"] = origin_raw
-            bundle_rec_local["serving_tier"] = str(choice_payload.get("serving_tier_hint", "tier1_personalized"))
             if origin == "top_bundle":
                 origin_label = "Top-bundle match"
             elif origin == "copurchase_fallback":
@@ -7174,18 +7376,6 @@ def build_recommendations_for_profiles(
                 origin_label = "Curated fallback"
             bundle_rec_local["recommendation_origin_label"] = origin_label
             bundle_rec_local["hybrid_reco_score"] = round(float(score_value), 3)
-            bundle_rec_local["final_stage_score"] = round(
-                float(choice_payload.get("final_stage_score", choice_payload.get("effective_score", score_value))),
-                3,
-            )
-            bundle_rec_local["final_stage_repetition_penalty"] = round(
-                float(choice_payload.get("final_stage_repetition_penalty", 0.0)),
-                4,
-            )
-            bundle_rec_local["final_stage_tuna_penalty"] = round(
-                float(choice_payload.get("final_stage_tuna_penalty", 0.0)),
-                4,
-            )
             bundle_rec_local["confidence_score"] = _confidence_from_score(float(score_value))
             bundle_rec_local["free_product"] = "product_b"
 
@@ -7251,8 +7441,18 @@ def build_recommendations_for_profiles(
             theme = str(choice_payload.get("theme", "")).strip()
             if theme:
                 bundle_rec_local["bundle_theme"] = theme
+                selected_themes.add(theme)
+            raw_fingerprint = choice_payload.get("pair_fingerprint")
+            if isinstance(raw_fingerprint, tuple) and len(raw_fingerprint) == 2:
+                fp0 = str(raw_fingerprint[0])
+                fp1 = str(raw_fingerprint[1])
+                selected_pair_fingerprints.add((fp0, fp1))
+            group_union_raw = choice_payload.get("group_union")
+            if isinstance(group_union_raw, list):
+                selected_lane_groups[lane_name] = {str(item) for item in group_union_raw if str(item).strip()}
             comp_family = str(context.product_family_by_id.get(int(b_id), "")).strip().lower() or "other"
             used_bundle_keys_for_person.add(display_pair_key)
+            used_anchors_for_person.add(int(logical_anchor_id))
             used_complements.add(int(b_id))
             used_complement_families[comp_family] = int(used_complement_families.get(comp_family, 0)) + 1
             global_anchor_counts[int(logical_anchor_id)] = int(global_anchor_counts.get(int(logical_anchor_id), 0)) + 1
@@ -7279,32 +7479,81 @@ def build_recommendations_for_profiles(
         profile_family_interest = _profile_family_interest(profile, context)
         profile_category_affinity = _profile_category_affinity(profile, context)
         profile_shopper_family_interest = _profile_shopper_family_interest(profile, context)
+        user_intent_profile = _build_user_intent_profile(profile, context)
+        user_top_intent, user_top_intent_weight = _top_intent(user_intent_profile)
+        cleaning_intent_weight = float(user_intent_profile.get(INTENT_CLEANING, 0.0))
+        sorted_intent_weights = sorted(
+            ((str(intent), float(user_intent_profile.get(str(intent), 0.0))) for intent in BUNDLE_INTENTS),
+            key=lambda item: (-float(item[1]), str(item[0])),
+        )
+        second_intent_weight = float(sorted_intent_weights[1][1]) if len(sorted_intent_weights) > 1 else 0.0
+        top_intent_gap = float(max(0.0, float(user_top_intent_weight) - float(second_intent_weight)))
+        dominant_intent_routing = bool(
+            str(user_top_intent) in (INTENT_ROUTING_ALLOWED_TOP_INTENTS - {INTENT_CLEANING})
+            and float(user_top_intent_weight) >= float(INTENT_ROUTING_DOMINANT_MIN_WEIGHT)
+            and float(top_intent_gap) >= float(INTENT_ROUTING_DOMINANT_MIN_GAP)
+        )
+        cleaning_intent_routing = bool(
+            str(user_top_intent) == INTENT_CLEANING
+            and float(cleaning_intent_weight) >= float(CLEANING_INTENT_ROUTING_THRESHOLD)
+        )
+        intent_routing_enabled = bool(
+            str(user_top_intent) in INTENT_ROUTING_ALLOWED_TOP_INTENTS and (dominant_intent_routing or cleaning_intent_routing)
+        )
+        allow_cleaning_intent_fill = bool(
+            float(cleaning_intent_weight) >= float(CLEANING_INTENT_FILL_THRESHOLD) or cleaning_intent_routing
+        )
+        include_nonfood = bool(
+            include_nonfood_default
+            or float(cleaning_intent_weight) >= float(CLEANING_INTENT_INCLUDE_THRESHOLD)
+            or cleaning_intent_routing
+        )
+        if include_nonfood and LANE_NONFOOD not in candidate_lanes:
+            candidate_lanes.append(LANE_NONFOOD)
         candidate_pool: dict[tuple[str, int, int, str], dict[str, object]] = {}
         local_duplicate_blocked = 0
-        history_product_ids = set(history_ids_for_profile)
-        history_product_count = len(history_product_ids)
-        is_no_history = history_product_count <= 0
-        is_sparse_history = 0 < history_product_count < int(LOW_HISTORY_PRODUCT_COUNT_THRESHOLD)
+        candidate_started = time.perf_counter()
 
         def _register_candidate(
             lane_name: str,
             choice: dict[str, object],
             score_value: float,
             *,
-            target_pool: dict[tuple[str, int, int, str], dict[str, object]] | None = None,
-            serving_tier_hint: str = "tier1_personalized",
+            enforce_fallback_quality: bool = True,
         ) -> None:
-            pool = candidate_pool if target_pool is None else target_pool
             anchor_id = int(_safe_int(choice.get("anchor"), default=-1))
             complement_id = int(_safe_int(choice.get("complement"), default=-1))
             if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
+                return
+            row = choice.get("bundle_row")
+            pair_row = row if isinstance(row, pd.Series) else None
+            sanity_reject = _bundle_sanity_reject_reason(
+                anchor_id,
+                complement_id,
+                str(lane_name),
+                context,
+                pair_row=pair_row,
+            )
+            if sanity_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_sanity")
+                return
+            final_quality_reject = _final_human_quality_reject_reason(
+                anchor_id,
+                complement_id,
+                str(lane_name),
+                context,
+                pair_row=pair_row,
+            )
+            if final_quality_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_final_human_quality")
                 return
             source = str(choice.get("source", "copurchase_fallback"))
             key = (str(lane_name), int(anchor_id), int(complement_id), source)
             candidate = dict(choice)
             candidate["lane"] = str(lane_name)
+            candidate["primary_intent"] = _bundle_primary_intent(candidate, context, lane_hint=str(lane_name))
             candidate["base_score"] = float(score_value)
-            candidate["personalization_boost"] = float(
+            base_personalization_boost = float(
                 _candidate_personalization_boost(
                     candidate,
                     profile,
@@ -7319,21 +7568,22 @@ def build_recommendations_for_profiles(
                     profile_shopper_family_interest=profile_shopper_family_interest,
                 )
             )
+            intent_boost = _intent_profile_boost(str(candidate.get("primary_intent", "")), user_intent_profile)
+            candidate["personalization_boost"] = float(base_personalization_boost + intent_boost)
             candidate["pool_score"] = float(candidate["base_score"]) + float(candidate["personalization_boost"])
             candidate["motif_family_signature"] = _candidate_motif_family_signature(candidate, context)
             candidate["family_pattern_signature"] = _candidate_family_pattern_signature(candidate, context)
             candidate["bundle_shape_signature"] = _candidate_bundle_shape_signature(candidate, context)
-            candidate["serving_tier_hint"] = str(choice.get("serving_tier_hint", serving_tier_hint))
-            fallback_quality_reject = _fallback_quality_reject_reason(candidate, context)
-            if fallback_quality_reject:
-                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_quality")
-                return
+            if enforce_fallback_quality:
+                fallback_quality_reject = _fallback_quality_reject_reason(candidate, context)
+                if fallback_quality_reject:
+                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_quality")
+                    return
             candidate["fallback_motif_key"] = _controlled_fallback_motif_key(candidate, context)
-            existing = pool.get(key)
+            existing = candidate_pool.get(key)
             if existing is None or float(candidate["pool_score"]) > float(existing.get("pool_score", -1e9)):
-                pool[key] = candidate
+                candidate_pool[key] = candidate
 
-        stage_start = time.perf_counter()
         for lane in candidate_lanes:
             if lane == LANE_NONFOOD and not include_nonfood:
                 continue
@@ -7357,38 +7607,76 @@ def build_recommendations_for_profiles(
                     reject_counters=gate_reject_counters,
                     allow_anchor_overflow=True,
                     serving_telemetry=serving_telemetry,
-                    history_ids_override=history_ids_for_profile,
-                    preferred_brand_by_family_override=preferred_brand_by_family,
                 )
                 local_duplicate_blocked += int(duplicate_blocked)
                 if choice is None:
                     continue
-                _register_candidate(
-                    lane,
-                    choice,
-                    float(personal_score),
-                    serving_tier_hint="tier1_personalized",
+                _register_candidate(lane, choice, float(personal_score))
+
+            history_ids_for_lane = {
+                int(pid)
+                for pid in profile.history_product_ids
+                if int(pid) > 0 and _anchor_allowed_for_lane(int(pid), lane, context)
+            }
+            history_ids_for_lane.update(int(pid) for pid in lane_candidate_ids.get(lane, ())[:TOP10_ANCHOR_SIZE] if int(pid) > 0)
+            for fallback_anchor, fallback_complement, _fallback_row, fallback_source in _fallback_candidates_for_lane(
+                history_ids_for_lane,
+                lane,
+                context,
+                top_bundle_rows_by_anchor,
+                bundle_lookup,
+            ):
+                choice, _choice_key, personal_score, duplicate_blocked = _pick_candidate_for_anchor(
+                    profile=profile,
+                    anchor=int(fallback_anchor),
+                    lane=lane,
+                    context=context,
+                    top_bundle_rows_by_anchor=top_bundle_rows_by_anchor,
+                    bundle_lookup=bundle_lookup,
+                    used_pair_keys=set(),
+                    feedback_lookup=feedback_lookup,
+                    rng=profile_rng,
+                    used_complements=set(),
+                    used_complement_families={},
+                    global_anchor_lane_counts=global_anchor_lane_counts,
+                    global_anchor_counts=global_anchor_counts,
+                    reject_counters=gate_reject_counters,
+                    allow_anchor_overflow=True,
+                    allowed_complements={int(fallback_complement)},
+                    serving_telemetry=serving_telemetry,
                 )
-        profile_timing_ms["candidate_build_ms"] = float((time.perf_counter() - stage_start) * 1000.0)
+                local_duplicate_blocked += int(duplicate_blocked)
+                if choice is None:
+                    continue
+                choice["source"] = str(fallback_source)
+                _register_candidate(lane, choice, float(personal_score))
 
-        candidate_pool_initially_empty = len(candidate_pool) <= 0
-
+        profiling.add_stage("candidate_generation", time.perf_counter() - candidate_started)
         global_duplicate_pair_count_blocked += int(local_duplicate_blocked)
         ordered_candidates = list(candidate_pool.values())
-        if len(ordered_candidates) > SERVING_MAX_EFFECTIVE_CANDIDATES:
-            ordered_candidates.sort(
-                key=lambda cand: (
-                    -float(cand.get("pool_score", cand.get("base_score", cand.get("personal_score", 0.0)))),
-                    int(_safe_int(cand.get("anchor"), default=-1)),
-                    int(_safe_int(cand.get("complement"), default=-1)),
-                )
-            )
-            ordered_candidates = ordered_candidates[:SERVING_MAX_EFFECTIVE_CANDIDATES]
-            _record_serving_telemetry(serving_telemetry, "global", "effective_pool_capped")
+        selected_choices: list[dict[str, object]] = []
+        selected_anchors: set[int] = set()
+        selected_pairs: set[tuple[int, int]] = set()
+        selected_item_ids: set[int] = set()
+        cleaning_count = 0
+        selected_fallback_motif_counts: dict[str, int] = {}
+        selected_intent_counts: dict[str, int] = {}
+        intent_lane_weight: dict[str, float] = {
+            LANE_MEAL: float(user_intent_profile.get(INTENT_MEAL_BASE, 0.0))
+            + float(user_intent_profile.get(INTENT_PREPARATION, 0.0))
+            + float(user_intent_profile.get(INTENT_STAPLES, 0.0)),
+            LANE_SNACK: float(user_intent_profile.get(INTENT_SNACK, 0.0)) + 0.35 * float(user_intent_profile.get(INTENT_DRINK_PAIRING, 0.0)),
+            LANE_OCCASION: float(user_intent_profile.get(INTENT_DESSERT, 0.0)) + float(user_intent_profile.get(INTENT_DRINK_PAIRING, 0.0)),
+            LANE_NONFOOD: float(user_intent_profile.get(INTENT_CLEANING, 0.0)),
+        }
+        lane_fill_order = sorted(
+            ALL_LANE_ORDER,
+            key=lambda lane_name: (-float(intent_lane_weight.get(lane_name, 0.0)), ALL_LANE_ORDER.index(lane_name)),
+        )
 
-        scoring_start = time.perf_counter()
-        enriched_candidates: list[dict[str, object]] = []
-        for candidate in ordered_candidates:
+        scoring_started = time.perf_counter()
+        
+        def _enrich_candidate_for_ranking(candidate: dict[str, object]) -> dict[str, object]:
             enriched = dict(candidate)
             effective_score = _candidate_effective_score(
                 enriched,
@@ -7399,40 +7687,194 @@ def build_recommendations_for_profiles(
                 global_motif_family_exposure=global_motif_family_exposure,
                 global_family_pattern_exposure=global_family_pattern_exposure,
                 global_bundle_shape_exposure=global_bundle_shape_exposure,
-                pair_feature_cache=pair_feature_cache,
+            )
+            motif_signature = str(enriched.get("motif_family_signature", "")).strip().lower()
+            family_exposure_count = int(global_motif_family_exposure.get(motif_signature, 0)) if motif_signature else 0
+            family_rank_penalty = min(
+                FAMILY_OVERUSE_RANK_PENALTY_CAP,
+                FAMILY_OVERUSE_RANK_PENALTY_STEP * float(max(0, family_exposure_count - 1)),
             )
             enriched["effective_score"] = float(effective_score)
-            enriched["effective_score_rank"] = float(effective_score)
-            enriched_candidates.append(enriched)
-        profile_timing_ms["scoring_ms"] = float((time.perf_counter() - scoring_start) * 1000.0)
+            enriched["family_exposure_count"] = int(family_exposure_count)
+            # Explicit close-score preference: when candidates are similarly strong, prefer rarer motif families.
+            enriched["effective_score_rank"] = float(effective_score) - float(family_rank_penalty)
+            return enriched
 
-        filtering_start = time.perf_counter()
-        selection_pool: list[dict[str, object]] = []
-        seen_selection_keys: set[tuple[int, int, str]] = set()
-        for candidate in enriched_candidates:
-            key = (
-                int(_safe_int(candidate.get("anchor"), default=-1)),
-                int(_safe_int(candidate.get("complement"), default=-1)),
-                str(candidate.get("source", "")).strip().lower(),
+        enriched_candidates: list[dict[str, object]] = [_enrich_candidate_for_ranking(candidate) for candidate in ordered_candidates]
+
+        strong_food_candidates = [
+            cand
+            for cand in enriched_candidates
+            if str(cand.get("lane", "")).strip().lower() in FOOD_LANE_ORDER
+            and not _is_household_bundle(cand, context)
+            and _candidate_is_strong_finalist(cand)
+        ]
+        best_strong_score = max((float(cand.get("effective_score", 0.0)) for cand in strong_food_candidates), default=float("-inf"))
+        best_rare_strong_score = max(
+            (
+                float(cand.get("effective_score", 0.0))
+                for cand in strong_food_candidates
+                if int(_safe_int(cand.get("family_exposure_count"), default=0)) < FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD
+            ),
+            default=float("-inf"),
+        )
+        for cand in strong_food_candidates:
+            lane_name = str(cand.get("lane", "")).strip().lower()
+            motif_signature = str(cand.get("motif_family_signature", "")).strip().lower()
+            family_exposure_count = int(_safe_int(cand.get("family_exposure_count"), default=0))
+            effective_score = float(cand.get("effective_score", 0.0))
+            rank_score = float(cand.get("effective_score_rank", effective_score))
+            if family_exposure_count >= 2 and _is_dominant_shopper_family_signature(motif_signature):
+                rank_score -= 0.34 * float((family_exposure_count - 1) ** 1.1)
+                if lane_name == LANE_MEAL:
+                    rank_score -= 0.20 * float(family_exposure_count - 1)
+            if family_exposure_count >= 1 and _is_utilitarian_shopper_family_signature(motif_signature):
+                rank_score -= 0.28 * float(family_exposure_count)
+
+            close_to_rare = (
+                best_rare_strong_score > float("-inf")
+                and best_rare_strong_score + FAMILY_RARITY_CLOSE_SCORE_MARGIN >= effective_score
             )
-            if key in seen_selection_keys:
-                continue
-            seen_selection_keys.add(key)
-            selection_pool.append(candidate)
-        profile_timing_ms["selection_pool_filter_ms"] = float((time.perf_counter() - filtering_start) * 1000.0)
+            if family_exposure_count >= FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD and close_to_rare:
+                overuse_steps = family_exposure_count - FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD + 1
+                rank_score -= 0.30 * float(overuse_steps)
+                if _is_dominant_shopper_family_signature(motif_signature):
+                    rank_score -= 0.20 * float(overuse_steps)
+                if lane_name == LANE_MEAL and _is_meal_dominant_motif_signature(motif_signature):
+                    rank_score -= MEAL_DOMINANT_CLOSE_SCORE_EXTRA_PENALTY * float(overuse_steps)
+                if _is_utilitarian_shopper_family_signature(motif_signature):
+                    rank_score -= 0.22 * float(overuse_steps)
 
-        profile_timing_ms["cleaning_fallback_ms"] = 0.0
+            if family_exposure_count < FAMILY_CLOSE_SCORE_OVERUSE_THRESHOLD and best_strong_score > float("-inf"):
+                close_gap = float(best_strong_score - effective_score)
+                if 0.0 <= close_gap <= FAMILY_RARITY_CLOSE_SCORE_MARGIN:
+                    rarity_boost = FAMILY_RARITY_CLOSE_SCORE_BONUS * (
+                        1.0 - (close_gap / max(FAMILY_RARITY_CLOSE_SCORE_MARGIN, 1e-9))
+                    )
+                    if _is_dominant_shopper_family_signature(motif_signature):
+                        rarity_boost *= 0.65
+                    if lane_name == LANE_MEAL and _is_utilitarian_shopper_family_signature(motif_signature):
+                        rarity_boost *= 0.55
+                    rank_score += float(max(0.0, rarity_boost))
 
-        selected_choices: list[dict[str, object]] = []
-        selected_anchors: set[int] = set()
-        selected_pairs: set[tuple[int, int]] = set()
-        selected_item_ids: set[int] = set()
-        selection_target = int(MAX_BUNDLES_PER_PERSON)
+            cand["effective_score_rank"] = float(rank_score)
 
-        def _try_select(choice_payload: dict[str, object]) -> bool:
-            anchor_id = int(_safe_int(choice_payload.get("anchor"), default=-1))
-            complement_id = int(_safe_int(choice_payload.get("complement"), default=-1))
+        food_candidates = [
+            cand
+            for cand in enriched_candidates
+            if str(cand.get("lane", "")).strip().lower() in FOOD_LANE_ORDER
+            and not _is_household_bundle(cand, context)
+            and _candidate_is_strong_finalist(cand)
+        ]
+        food_candidates.sort(
+            key=lambda cand: (
+                -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                int(_safe_int(cand.get("family_exposure_count"), default=0)),
+                -float(cand.get("effective_score", 0.0)),
+                _source_priority_rank(str(cand.get("source", ""))),
+                int(_safe_int(cand.get("pair_count"), default=0)) * -1,
+                int(_safe_int(cand.get("complement"), default=-1)),
+                int(_safe_int(cand.get("anchor"), default=-1)),
+            )
+        )
+        fallback_fill_candidates = [
+            cand
+            for cand in enriched_candidates
+            if _source_group_from_source(str(cand.get("source", ""))) in {"fallback_food", "fallback_cleaning"}
+            and _candidate_is_fill_finalist(cand)
+        ]
+        fallback_fill_candidates.sort(
+            key=lambda cand: (
+                -float(user_intent_profile.get(str(cand.get("primary_intent", "")).strip().lower(), 0.0)),
+                int(lane_fill_order.index(str(cand.get("lane", "")).strip().lower()))
+                if str(cand.get("lane", "")).strip().lower() in lane_fill_order
+                else len(lane_fill_order),
+                -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                _source_priority_rank(str(cand.get("source", ""))),
+                int(_safe_int(cand.get("complement"), default=-1)),
+                int(_safe_int(cand.get("anchor"), default=-1)),
+            )
+        )
+        intent_priority_candidates: list[dict[str, object]] = []
+        if intent_routing_enabled and str(user_top_intent) in BUNDLE_INTENTS:
+            top_intent_key = str(user_top_intent)
+            for candidate in enriched_candidates:
+                intent_key = str(candidate.get("primary_intent", "")).strip().lower()
+                if intent_key not in BUNDLE_INTENTS:
+                    intent_key = _bundle_primary_intent(candidate, context, lane_hint=str(candidate.get("lane", "")))
+                    candidate["primary_intent"] = intent_key
+                if intent_key != top_intent_key:
+                    continue
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                if top_intent_key == INTENT_CLEANING:
+                    if not is_cleaning_candidate:
+                        continue
+                    if not _candidate_is_fill_finalist(candidate):
+                        continue
+                else:
+                    if is_cleaning_candidate:
+                        continue
+                    if not (_candidate_is_strong_finalist(candidate) or _candidate_is_fill_finalist(candidate)):
+                        continue
+                intent_priority_candidates.append(candidate)
+            intent_priority_candidates.sort(
+                key=lambda cand: (
+                    -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                    _source_priority_rank(str(cand.get("source", ""))),
+                    int(_safe_int(cand.get("pair_count"), default=0)) * -1,
+                    int(_safe_int(cand.get("complement"), default=-1)),
+                    int(_safe_int(cand.get("anchor"), default=-1)),
+                )
+            )
+            intent_priority_candidates = intent_priority_candidates[: int(max(1, INTENT_ROUTING_MAX_CANDIDATES))]
+        food_selection_candidates = list(food_candidates)
+        if dominant_intent_routing and str(user_top_intent) != INTENT_CLEANING and intent_priority_candidates:
+            merged_candidates: list[dict[str, object]] = []
+            seen_keys: set[tuple[str, int, int, str]] = set()
+            priority_food_candidates = [cand for cand in intent_priority_candidates if not _is_household_bundle(cand, context)]
+            for candidate in list(priority_food_candidates) + list(food_candidates):
+                lane_key = str(candidate.get("lane", "")).strip().lower()
+                candidate_key = (
+                    lane_key,
+                    int(_safe_int(candidate.get("anchor"), default=-1)),
+                    int(_safe_int(candidate.get("complement"), default=-1)),
+                    str(candidate.get("source", "")),
+                )
+                if candidate_key in seen_keys:
+                    continue
+                seen_keys.add(candidate_key)
+                merged_candidates.append(candidate)
+            food_selection_candidates = merged_candidates
+        profiling.add_stage("scoring_ranking", time.perf_counter() - scoring_started)
+
+        def _try_select(candidate: dict[str, object], *, allow_cleaning: bool, intent_cap_override: bool = False) -> bool:
+            nonlocal cleaning_count
+            anchor_id = int(_safe_int(candidate.get("anchor"), default=-1))
+            complement_id = int(_safe_int(candidate.get("complement"), default=-1))
             if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
+                return False
+            lane_name = str(candidate.get("lane", "")).strip().lower() or LANE_MEAL
+            row = candidate.get("bundle_row")
+            pair_row = row if isinstance(row, pd.Series) else None
+            sanity_reject = _bundle_sanity_reject_reason(
+                anchor_id,
+                complement_id,
+                lane_name,
+                context,
+                pair_row=pair_row,
+            )
+            if sanity_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_sanity")
+                return False
+            final_quality_reject = _final_human_quality_reject_reason(
+                anchor_id,
+                complement_id,
+                lane_name,
+                context,
+                pair_row=pair_row,
+            )
+            if final_quality_reject:
+                _record_serving_telemetry(serving_telemetry, lane_name, "rejected_final_human_quality")
                 return False
             pair_key = _pair_key(anchor_id, complement_id)
             if (
@@ -7442,235 +7884,319 @@ def build_recommendations_for_profiles(
                 or pair_key in selected_pairs
             ):
                 return False
-            selected_choices.append(choice_payload)
+            intent_key = str(candidate.get("primary_intent", "")).strip().lower()
+            if intent_key not in BUNDLE_INTENTS:
+                intent_key = _bundle_primary_intent(candidate, context, lane_hint=lane_name)
+                candidate["primary_intent"] = intent_key
+            if not intent_cap_override and intent_key in BUNDLE_INTENTS:
+                already_selected = int(selected_intent_counts.get(intent_key, 0))
+                concentrated_preference = bool(
+                    intent_key == user_top_intent and float(user_top_intent_weight) >= float(INTENT_DIVERSITY_CONCENTRATION_THRESHOLD)
+                )
+                if already_selected >= int(INTENT_DIVERSITY_MAX_PER_PERSON) and not concentrated_preference:
+                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_intent_soft_cap")
+                    return False
+            is_cleaning = _is_household_bundle(candidate, context)
+            if is_cleaning and not allow_cleaning:
+                return False
+            if is_cleaning and cleaning_count >= MAX_CLEANING_BUNDLES_PER_PERSON and not intent_cap_override:
+                return False
+            source_group = _source_group_from_source(str(candidate.get("source", "")))
+            fallback_motif = str(candidate.get("fallback_motif_key", "")).strip()
+            if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
+                current_motif_count = int(selected_fallback_motif_counts.get(fallback_motif, 0))
+                if current_motif_count >= FALLBACK_MOTIF_REPEAT_CAP_PER_PERSON:
+                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_motif_repeat")
+                    return False
+                if fallback_motif in EVAP_REPETITIVE_FALLBACK_MOTIFS:
+                    evap_count = sum(
+                        int(selected_fallback_motif_counts.get(motif_key, 0))
+                        for motif_key in EVAP_REPETITIVE_FALLBACK_MOTIFS
+                    )
+                    if evap_count >= FALLBACK_EVAP_MOTIF_CAP_PER_PERSON:
+                        _record_serving_telemetry(serving_telemetry, lane_name, "rejected_fallback_evap_motif_cap")
+                        return False
+            selected_choices.append(candidate)
             selected_anchors.add(anchor_id)
             selected_pairs.add(pair_key)
             selected_item_ids.add(anchor_id)
             selected_item_ids.add(complement_id)
+            if intent_key in BUNDLE_INTENTS:
+                selected_intent_counts[intent_key] = int(selected_intent_counts.get(intent_key, 0)) + 1
+            if is_cleaning:
+                cleaning_count += 1
+            if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
+                selected_fallback_motif_counts[fallback_motif] = int(selected_fallback_motif_counts.get(fallback_motif, 0)) + 1
             return True
 
-        def _softened_pair_exposure_for_fill(
-            exposure_map: dict[tuple[int, int], int],
-            relax_factor: float,
-        ) -> dict[tuple[int, int], int]:
-            factor = max(0.0, min(1.0, float(relax_factor)))
-            if factor >= 1.0:
-                return {tuple(key): int(max(0, count)) for key, count in exposure_map.items() if int(count) > 0}
-            softened: dict[tuple[int, int], int] = {}
-            for key, count in exposure_map.items():
-                exposure_count = max(0, int(count))
-                if exposure_count <= 0:
+        selection_started = time.perf_counter()
+        if (
+            len(selected_choices) < MAX_BUNDLES_PER_PERSON
+            and cleaning_intent_routing
+            and str(user_top_intent) == INTENT_CLEANING
+            and intent_priority_candidates
+        ):
+            routed_count = 0
+            for candidate in intent_priority_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                allow_cleaning_candidate = bool(is_cleaning_candidate and allow_cleaning_intent_fill)
+                if is_cleaning_candidate and not allow_cleaning_candidate:
                     continue
-                softened[key] = max(1, int(math.floor(float(exposure_count) * factor)))
-            return softened
-
-        def _fill_from_tier(
-            tier_name: str,
-            tier_candidates: list[dict[str, object]],
-            *,
-            pair_exposure_for_tier: dict[tuple[int, int], int],
-            max_accept: int,
-            enforce_personalized_cap: bool = False,
-        ) -> None:
-            tier_start = time.perf_counter()
-            _record_serving_telemetry(serving_telemetry, tier_name, "tier_fill_invoked")
-            if max_accept <= 0 or not tier_candidates:
-                profile_timing_ms[f"{tier_name}_ms"] = float(
-                    profile_timing_ms.get(f"{tier_name}_ms", 0.0) + (time.perf_counter() - tier_start) * 1000.0
-                )
-                return
-            blocked_items = set(selected_item_ids)
-            blocked_pairs = set(selected_pairs)
-            deduped_candidates: list[dict[str, object]] = []
-            seen_keys: set[tuple[int, int, str]] = set()
-            for candidate in tier_candidates:
-                anchor_id = int(_safe_int(candidate.get("anchor"), default=-1))
-                complement_id = int(_safe_int(candidate.get("complement"), default=-1))
-                if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
-                    continue
-                pair_key = _pair_key(anchor_id, complement_id)
-                if anchor_id in blocked_items or complement_id in blocked_items or pair_key in blocked_pairs:
-                    continue
-                dedupe_key = (
-                    anchor_id,
-                    complement_id,
-                    str(candidate.get("source", "")).strip().lower(),
-                )
-                if dedupe_key in seen_keys:
-                    continue
-                seen_keys.add(dedupe_key)
-                enriched = dict(candidate)
-                enriched["serving_tier_hint"] = str(tier_name)
-                deduped_candidates.append(enriched)
-            if not deduped_candidates:
-                profile_timing_ms[f"{tier_name}_ms"] = float(
-                    profile_timing_ms.get(f"{tier_name}_ms", 0.0) + (time.perf_counter() - tier_start) * 1000.0
-                )
-                return
-            if len(deduped_candidates) > SERVING_MAX_TIER_FINAL_STAGE_CANDIDATES:
-                deduped_candidates.sort(
-                    key=lambda cand: (
-                        -float(cand.get("effective_score", cand.get("pool_score", cand.get("base_score", 0.0)))),
-                        int(_safe_int(cand.get("anchor"), default=-1)),
-                        int(_safe_int(cand.get("complement"), default=-1)),
-                    )
-                )
-                deduped_candidates = deduped_candidates[:SERVING_MAX_TIER_FINAL_STAGE_CANDIDATES]
-                _record_serving_telemetry(serving_telemetry, tier_name, "tier_candidates_capped")
-            tier_selected = _select_final_candidates_for_person(
-                deduped_candidates,
-                context=context,
-                global_pair_exposure=pair_exposure_for_tier,
-                serving_telemetry=serving_telemetry,
-                pair_feature_cache=pair_feature_cache,
-                timing_bucket=profile_timing_ms,
-                max_bundles=min(
-                    len(deduped_candidates),
-                    int(max_accept),
-                ),
-            )
-            selected_before = int(len(selected_choices))
-            for choice_payload in tier_selected:
-                lane_name = str(choice_payload.get("lane", LANE_MEAL)).strip().lower() or LANE_MEAL
-                origin_raw = str(choice_payload.get("source", ""))
-                score_value = float(
-                    choice_payload.get(
-                        "final_stage_score",
-                        choice_payload.get("effective_score", choice_payload.get("pool_score", choice_payload.get("base_score", 0.0))),
-                    )
-                )
-                if not _passes_choice_score_floor(lane_name, origin_raw, score_value):
-                    if tier_name != "tier2_safe_fallback":
-                        _record_serving_telemetry(serving_telemetry, lane_name, "rejected_score_floor")
-                        continue
-                if enforce_personalized_cap and len(selected_choices) >= int(PERSONALIZED_TARGET_BUNDLES):
-                    if len(selected_choices) >= int(MAX_BUNDLES_PER_PERSON):
-                        break
-                    if not _is_strong_personalized_third_choice(choice_payload):
-                        continue
-                _try_select(choice_payload)
-                if len(selected_choices) >= int(selection_target):
-                    break
-            _record_serving_telemetry(
-                serving_telemetry,
-                tier_name,
-                "tier_fill_selected",
-                amount=int(max(0, len(selected_choices) - selected_before)),
-            )
-            profile_timing_ms[f"{tier_name}_ms"] = float(
-                profile_timing_ms.get(f"{tier_name}_ms", 0.0) + (time.perf_counter() - tier_start) * 1000.0
-            )
-
-        tier1_candidates = []
-        for candidate in selection_pool:
-            source_group = _source_group_from_source(str(candidate.get("source", "")))
-            if source_group in {"top_bundle", "copurchase_fallback"}:
-                enriched = dict(candidate)
-                enriched["serving_tier_hint"] = "tier1_personalized"
-                tier1_candidates.append(enriched)
-
-        _fill_from_tier(
-            "tier1_personalized",
-            tier1_candidates,
-            pair_exposure_for_tier=dict(global_pair_exposure),
-            max_accept=int(MAX_BUNDLES_PER_PERSON),
-            enforce_personalized_cap=True,
-        )
-        if len(selected_choices) < int(selection_target):
-            build_start = time.perf_counter()
-            fallback_food_candidates: list[dict[str, object]] = []
-            fallback_nonfood_candidates: list[dict[str, object]] = []
-            pair_exposure_for_fallback = _softened_pair_exposure_for_fill(
-                global_pair_exposure,
-                SERVING_TIER2_REPETITION_RELAX_FACTOR,
-            )
-            for fallback_seed in curated_fallback_pool:
-                anchor_id = int(_safe_int(fallback_seed.get("anchor"), default=-1))
-                complement_id = int(_safe_int(fallback_seed.get("complement"), default=-1))
-                if anchor_id <= 0 or complement_id <= 0 or anchor_id == complement_id:
-                    continue
-                pair_key = _pair_key(anchor_id, complement_id)
+                if _try_select(candidate, allow_cleaning=allow_cleaning_candidate):
+                    routed_count += 1
                 if (
-                    anchor_id in selected_item_ids
-                    or complement_id in selected_item_ids
-                    or pair_key in selected_pairs
+                    routed_count >= int(max(1, INTENT_ROUTING_MAX_EARLY_SELECTIONS))
+                    or len(selected_choices) >= MAX_BUNDLES_PER_PERSON
                 ):
+                    break
+        # Mild lane-balance nudge: if a strong non-meal option is close in score, take one early.
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            top_meal_score = max(
+                (
+                    float(cand.get("effective_score", 0.0))
+                    for cand in food_candidates
+                    if str(cand.get("lane", "")).strip().lower() == LANE_MEAL
+                ),
+                default=float("-inf"),
+            )
+            non_meal_candidates = [
+                cand
+                for cand in food_candidates
+                if str(cand.get("lane", "")).strip().lower() in {LANE_SNACK, LANE_OCCASION}
+            ]
+            for candidate in non_meal_candidates:
+                candidate_lane = str(candidate.get("lane", "")).strip().lower()
+                if float(lane_intent_map.get(candidate_lane, 0.0)) < 0.20:
                     continue
-                candidate = dict(fallback_seed)
-                candidate["anchor"] = int(anchor_id)
-                candidate["complement"] = int(complement_id)
-                candidate["serving_tier_hint"] = "tier2_safe_fallback"
-                candidate["lane"] = str(candidate.get("lane", LANE_MEAL)).strip().lower() or LANE_MEAL
-                if candidate["lane"] == LANE_NONFOOD and not include_nonfood:
+                candidate_score = float(candidate.get("effective_score", 0.0))
+                if top_meal_score > float("-inf") and candidate_score + NON_MEAL_COVERAGE_MARGIN < top_meal_score:
                     continue
-                candidate["fallback_motif_key"] = _controlled_fallback_motif_key(candidate, context)
-                score_base = float(candidate.get("pool_score", candidate.get("effective_score", 0.0)))
-                if anchor_id in history_product_ids:
-                    score_base += 0.06
-                if complement_id in history_product_ids:
-                    score_base += 0.03
-                candidate["pool_score"] = float(score_base)
-                row = candidate.get("bundle_row")
-                row_series = row if isinstance(row, pd.Series) else None
-                row_cp_score = _safe_float(
-                    row_series.get("purchase_score", row_series.get("copurchase_score", 0.0)) if row_series is not None else 0.0,
-                    default=0.0,
-                )
-                row_pair_count = int(
-                    _safe_int(
-                        row_series.get("pair_count", row_series.get("co_purchase_count", 0)) if row_series is not None else 0,
-                        default=0,
-                    )
-                )
-                if (row_pair_count > 0 and row_pair_count < 4) or (row_cp_score > 0.0 and row_cp_score < 18.0):
-                    _record_serving_telemetry(serving_telemetry, str(candidate.get("lane", "")), "rejected_fallback_quality")
-                    continue
-                effective_score = _candidate_effective_score(
+                if _try_select(candidate, allow_cleaning=False):
+                    break
+
+        for candidate in food_selection_candidates:
+            if _try_select(candidate, allow_cleaning=False) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            for candidate in food_selection_candidates:
+                if _try_select(candidate, allow_cleaning=False, intent_cap_override=True) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            allow_cleaning_tier2 = bool(allow_cleaning_intent_fill)
+            for candidate in fallback_fill_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                if _try_select(
                     candidate,
+                    allow_cleaning=bool(allow_cleaning_tier2 and is_cleaning_candidate),
+                ) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            allow_cleaning_tier2 = bool(allow_cleaning_intent_fill)
+            for candidate in fallback_fill_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                if _try_select(
+                    candidate,
+                    allow_cleaning=bool(allow_cleaning_tier2 and is_cleaning_candidate),
+                    intent_cap_override=True,
+                ) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        def _build_reserve_fill_candidates() -> list[dict[str, object]]:
+            nonlocal local_duplicate_blocked
+            existing_keys = set(candidate_pool.keys())
+            for lane_name in lane_fill_order:
+                reserve_history_ids: set[int] = set()
+                if lane_name == LANE_NONFOOD:
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in profile.history_product_ids
+                        if int(pid) > 0 and _is_nonfood_product(int(pid), context)
+                    )
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in lane_candidate_ids.get(LANE_NONFOOD, ())[:RESERVE_ANCHOR_POOL_LIMIT_PER_LANE]
+                        if int(pid) > 0
+                    )
+                    if len(reserve_history_ids) < RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                        for pid in context.non_food_ids:
+                            pid_int = int(pid)
+                            if pid_int <= 0:
+                                continue
+                            reserve_history_ids.add(pid_int)
+                            if len(reserve_history_ids) >= RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                                break
+                else:
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in profile.history_product_ids
+                        if int(pid) > 0 and _anchor_allowed_for_lane(int(pid), lane_name, context)
+                    )
+                    reserve_history_ids.update(
+                        int(pid)
+                        for pid in lane_candidate_ids.get(lane_name, ())[:RESERVE_ANCHOR_POOL_LIMIT_PER_LANE]
+                        if int(pid) > 0 and _anchor_allowed_for_lane(int(pid), lane_name, context)
+                    )
+                    if len(reserve_history_ids) < RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                        for pid in top_bundle_rows_by_anchor.keys():
+                            pid_int = int(pid)
+                            if pid_int <= 0 or not _anchor_allowed_for_lane(pid_int, lane_name, context):
+                                continue
+                            reserve_history_ids.add(pid_int)
+                            if len(reserve_history_ids) >= RESERVE_ANCHOR_POOL_LIMIT_PER_LANE:
+                                break
+                if not reserve_history_ids:
+                    continue
+                for fallback_anchor, fallback_complement, _fallback_row, fallback_source in _fallback_candidates_for_lane(
+                    reserve_history_ids,
+                    lane_name,
                     context,
-                    global_pair_exposure={},
+                    top_bundle_rows_by_anchor,
+                    bundle_lookup,
+                    template_limit=RESERVE_CURATED_TEMPLATES_PER_LANE,
+                ):
+                    choice, _choice_key, personal_score, duplicate_blocked = _pick_candidate_for_anchor(
+                        profile=profile,
+                        anchor=int(fallback_anchor),
+                        lane=lane_name,
+                        context=context,
+                        top_bundle_rows_by_anchor=top_bundle_rows_by_anchor,
+                        bundle_lookup=bundle_lookup,
+                        used_pair_keys=set(),
+                        feedback_lookup=feedback_lookup,
+                        rng=profile_rng,
+                        used_complements=set(),
+                        used_complement_families={},
+                        global_anchor_lane_counts=global_anchor_lane_counts,
+                        global_anchor_counts=global_anchor_counts,
+                        reject_counters=gate_reject_counters,
+                        allow_anchor_overflow=True,
+                        allowed_complements={int(fallback_complement)},
+                        serving_telemetry=serving_telemetry,
+                    )
+                    local_duplicate_blocked += int(duplicate_blocked)
+                    if choice is None:
+                        continue
+                    choice["source"] = str(fallback_source)
+                    _register_candidate(
+                        lane_name,
+                        choice,
+                        float(personal_score) - 0.05,
+                        enforce_fallback_quality=False,
+                    )
+
+            reserve_candidates: list[dict[str, object]] = []
+            for key, candidate in candidate_pool.items():
+                if key in existing_keys:
+                    continue
+                reserve_candidates.append(_enrich_candidate_for_ranking(candidate))
+            reserve_candidates.sort(
+                key=lambda cand: (
+                    -float(user_intent_profile.get(str(cand.get("primary_intent", "")).strip().lower(), 0.0)),
+                    int(lane_fill_order.index(str(cand.get("lane", "")).strip().lower()))
+                    if str(cand.get("lane", "")).strip().lower() in lane_fill_order
+                    else len(lane_fill_order),
+                    -float(cand.get("effective_score_rank", cand.get("effective_score", 0.0))),
+                    _source_priority_rank(str(cand.get("source", ""))),
+                    int(_safe_int(cand.get("complement"), default=-1)),
+                    int(_safe_int(cand.get("anchor"), default=-1)),
+                )
+            )
+            return reserve_candidates
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            reserve_fill_candidates = _build_reserve_fill_candidates()
+            for candidate in reserve_fill_candidates:
+                is_cleaning_candidate = _is_household_bundle(candidate, context)
+                allow_cleaning_candidate = bool(
+                    not is_cleaning_candidate
+                    or allow_cleaning_intent_fill
+                    or len(selected_choices) <= 1
+                )
+                if _try_select(
+                    candidate,
+                    allow_cleaning=allow_cleaning_candidate,
+                    intent_cap_override=True,
+                ) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            cleaning_history_ids = {
+                int(pid)
+                for pid in profile.history_product_ids
+                if int(pid) > 0 and _is_nonfood_product(int(pid), context)
+            }
+            cleaning_history_ids.update(int(pid) for pid in lane_candidate_ids.get(LANE_NONFOOD, ())[:TOP10_ANCHOR_SIZE] if int(pid) > 0)
+            cleaning_candidates: list[dict[str, object]] = []
+            for fallback_anchor, fallback_complement, _fallback_row, fallback_source in _fallback_candidates_for_lane(
+                cleaning_history_ids,
+                LANE_NONFOOD,
+                context,
+                top_bundle_rows_by_anchor,
+                bundle_lookup,
+            ):
+                choice, _choice_key, personal_score, duplicate_blocked = _pick_candidate_for_anchor(
+                    profile=profile,
+                    anchor=int(fallback_anchor),
+                    lane=LANE_NONFOOD,
+                    context=context,
+                    top_bundle_rows_by_anchor=top_bundle_rows_by_anchor,
+                    bundle_lookup=bundle_lookup,
+                    used_pair_keys=set(),
+                    feedback_lookup=feedback_lookup,
+                    rng=profile_rng,
+                    used_complements=set(),
+                    used_complement_families={},
+                    global_anchor_lane_counts=global_anchor_lane_counts,
+                    global_anchor_counts=global_anchor_counts,
+                    reject_counters=gate_reject_counters,
+                    allow_anchor_overflow=True,
+                    allowed_complements={int(fallback_complement)},
+                    serving_telemetry=serving_telemetry,
+                )
+                local_duplicate_blocked += int(duplicate_blocked)
+                if choice is None:
+                    continue
+                enriched = dict(choice)
+                enriched["source"] = str(fallback_source)
+                enriched["lane"] = LANE_NONFOOD
+                enriched["base_score"] = float(personal_score)
+                enriched["primary_intent"] = _bundle_primary_intent(enriched, context, lane_hint=LANE_NONFOOD)
+                intent_boost = _intent_profile_boost(str(enriched.get("primary_intent", "")), user_intent_profile)
+                enriched["pool_score"] = float(personal_score + intent_boost)
+                enriched["effective_score"] = _candidate_effective_score(
+                    enriched,
+                    context,
+                    global_pair_exposure=global_pair_exposure,
                     global_template_exposure=global_template_exposure,
                     global_fallback_motif_exposure=global_fallback_motif_exposure,
                     global_motif_family_exposure=global_motif_family_exposure,
                     global_family_pattern_exposure=global_family_pattern_exposure,
                     global_bundle_shape_exposure=global_bundle_shape_exposure,
-                    pair_feature_cache=pair_feature_cache,
                 )
-                candidate["effective_score"] = float(effective_score)
-                candidate["effective_score_rank"] = float(effective_score)
-                if candidate["lane"] == LANE_NONFOOD:
-                    fallback_nonfood_candidates.append(candidate)
-                else:
-                    fallback_food_candidates.append(candidate)
-            profile_timing_ms["tier2_build_ms"] = float(
-                profile_timing_ms.get("tier2_build_ms", 0.0) + (time.perf_counter() - build_start) * 1000.0
-            )
-            _fill_from_tier(
-                "tier2_safe_fallback",
-                fallback_food_candidates,
-                pair_exposure_for_tier=pair_exposure_for_fallback,
-                max_accept=int(selection_target - len(selected_choices)),
-            )
-            if include_nonfood and len(selected_choices) < int(selection_target):
-                _fill_from_tier(
-                    "tier2_safe_fallback",
-                    fallback_nonfood_candidates,
-                    pair_exposure_for_tier=pair_exposure_for_fallback,
-                    max_accept=int(selection_target - len(selected_choices)),
+                cleaning_candidates.append(enriched)
+            cleaning_candidates.sort(
+                key=lambda cand: (
+                    -float(cand.get("effective_score", 0.0)),
+                    _source_priority_rank(str(cand.get("source", ""))),
+                    int(_safe_int(cand.get("complement"), default=-1)),
+                    int(_safe_int(cand.get("anchor"), default=-1)),
                 )
+            )
+            for candidate in cleaning_candidates:
+                if _try_select(candidate, allow_cleaning=True, intent_cap_override=True) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
 
-        finalize_start = time.perf_counter()
+        profiling.add_stage("selection_fill", time.perf_counter() - selection_started)
+        finalize_started = time.perf_counter()
         for chosen in selected_choices:
             lane = str(chosen.get("lane", LANE_MEAL)).strip().lower()
             bundle_rec, local_duplicate_blocked = _finalize_choice(
                 lane,
                 chosen,
-                float(
-                    chosen.get(
-                        "final_stage_score",
-                        chosen.get("effective_score", chosen.get("base_score", chosen.get("personal_score", 0.0))),
-                    )
-                ),
+                float(chosen.get("base_score", chosen.get("personal_score", 0.0))),
                 local_dup_counter=0,
             )
             if bundle_rec is None:
@@ -7703,26 +8229,58 @@ def build_recommendations_for_profiles(
             bundles_for_person.append(bundle_rec)
             if len(bundles_for_person) >= MAX_BUNDLES_PER_PERSON:
                 break
-        profile_timing_ms["finalize_output_ms"] = float((time.perf_counter() - finalize_start) * 1000.0)
 
+        profiling.add_stage("output_assembly", time.perf_counter() - finalize_started)
         bundles_for_person = bundles_for_person[:MAX_BUNDLES_PER_PERSON]
 
-        assemble_start = time.perf_counter()
+        if (
+            ENABLE_RANDOM_PROFILE_RESAMPLE
+            and len(bundles_for_person) < MAX_BUNDLES_PER_PERSON
+            and str(profile.source).strip().lower() == "random"
+        ):
+            replaced = False
+            _record_serving_telemetry(serving_telemetry, "global", "resample_attempted")
+            while resample_budget > 0 and not replaced:
+                resample_budget -= 1
+                resample_rng = _rng_for_profile(
+                    run_id,
+                    profile_seed_key,
+                    rng_salt=f"{rng_salt or ''}::resample::{resample_budget}",
+                )
+                candidate_profile = build_random_profile(order_pool, rng=resample_rng)
+                if candidate_profile is None:
+                    continue
+                signature = tuple(sorted(int(pid) for pid in candidate_profile.history_product_ids if int(pid) > 0))
+                if not signature or signature in seen_signatures:
+                    _record_serving_telemetry(serving_telemetry, "global", "resample_duplicate_signature")
+                    continue
+                seen_signatures.add(signature)
+                profile_queue.append(candidate_profile)
+                _record_serving_telemetry(serving_telemetry, "global", "resample_success")
+                replaced = True
+            if replaced:
+                profile_total_sec = time.perf_counter() - profile_started
+                profiling.add_stage("profile_total", profile_total_sec)
+                profiling.add_profile(
+                    {
+                        "profile_id": str(profile.profile_id),
+                        "source": str(profile.source),
+                        "status": "resampled",
+                        "bundle_count": int(len(bundles_for_person)),
+                        "duration_sec": float(profile_total_sec),
+                    }
+                )
+                continue
+            _record_serving_telemetry(serving_telemetry, "global", "resample_exhausted")
+
         person_label = f"Person {len(recommendations) + 1}"
         selected_food_lanes = {str(b.get("lane", "")) for b in bundles_for_person if str(b.get("lane", "")) in FOOD_LANE_ORDER}
         missing_food_lanes = [lane_name for lane_name in FOOD_LANE_ORDER if lane_name not in selected_food_lanes]
-        if is_no_history:
-            recommendation_mode = "fallback_no_history"
-        elif is_sparse_history or candidate_pool_initially_empty:
-            recommendation_mode = "fallback_sparse_history"
-        else:
-            recommendation_mode = "personalized"
         person_recommendation: dict[str, object] = {
             "person_label": person_label,
             "profile_id": profile.profile_id,
             "source": profile.source,
             "run_id": str(run_id or ""),
-            "recommendation_mode": recommendation_mode,
             "source_order_ids": list(profile.order_ids),
             "order_count": len(profile.order_ids),
             "history_items": list(profile.history_items),
@@ -7730,19 +8288,18 @@ def build_recommendations_for_profiles(
             "missing_food_lanes": missing_food_lanes,
             "bundles": bundles_for_person,
         }
-        profile_timing_ms["output_assembly_ms"] = float((time.perf_counter() - assemble_start) * 1000.0)
-        profile_timing_ms["profile_total_ms"] = float((time.perf_counter() - profile_start) * 1000.0)
-        _merge_timing_ms(timing_totals_ms, profile_timing_ms)
-        if profile_mode_enabled:
-            profile_timing_rows.append({"index": int(len(recommendations) + 1), **{k: float(v) for k, v in profile_timing_ms.items()}})
-            person_recommendation["serving_profile_timing_ms"] = {k: round(float(v), 3) for k, v in sorted(profile_timing_ms.items())}
         recommendations.append(person_recommendation)
-
-    if timing_totals_ms:
-        for key, value in timing_totals_ms.items():
-            _record_serving_timing_ms(serving_telemetry, key, float(value) / 1000.0)
-    if profile_mode_enabled and profile_timing_rows:
-        serving_telemetry.profile_timings_ms = profile_timing_rows
+        profile_total_sec = time.perf_counter() - profile_started
+        profiling.add_stage("profile_total", profile_total_sec)
+        profiling.add_profile(
+            {
+                "profile_id": str(profile.profile_id),
+                "source": str(profile.source),
+                "status": "served",
+                "bundle_count": int(len(bundles_for_person)),
+                "duration_sec": float(profile_total_sec),
+            }
+        )
 
     _write_person_quality_artifact(
         active_base_dir,
@@ -7754,4 +8311,35 @@ def build_recommendations_for_profiles(
         guardrail_reject_counts=gate_reject_counters,
         serving_telemetry=serving_telemetry,
     )
+    total_runtime_sec = time.perf_counter() - overall_started
+    profile_durations = [float(item.get("duration_sec", 0.0)) for item in profiling.per_profile if float(item.get("duration_sec", 0.0)) > 0]
+    metrics_payload = {
+        "enabled": bool(profiling.enabled),
+        "run_id": str(run_id or ""),
+        "profile_count": int(len(profile_durations)),
+        "total_runtime_sec": float(total_runtime_sec),
+        "avg_latency_sec": float((sum(profile_durations) / len(profile_durations)) if profile_durations else 0.0),
+        "p50_latency_sec": float(_percentile(profile_durations, 0.50)),
+        "p90_latency_sec": float(_percentile(profile_durations, 0.90)),
+        "p95_latency_sec": float(_percentile(profile_durations, 0.95)),
+        "stage_totals_sec": {str(k): float(v) for k, v in sorted(profiling.stage_totals.items())},
+        "per_profile": list(profiling.per_profile),
+    }
+    _LAST_SERVING_PROFILE_METRICS = metrics_payload
+    if profiling.enabled:
+        print(
+            "[qeu-serving-profile] "
+            f"profiles={metrics_payload['profile_count']} "
+            f"total_sec={metrics_payload['total_runtime_sec']:.3f} "
+            f"avg_sec={metrics_payload['avg_latency_sec']:.3f} "
+            f"p50_sec={metrics_payload['p50_latency_sec']:.3f} "
+            f"p90_sec={metrics_payload['p90_latency_sec']:.3f} "
+            f"p95_sec={metrics_payload['p95_latency_sec']:.3f}"
+        )
+        if profiling.stage_totals:
+            stage_parts = ", ".join(
+                f"{stage}={value:.3f}s"
+                for stage, value in sorted(profiling.stage_totals.items(), key=lambda item: (-item[1], item[0]))
+            )
+            print(f"[qeu-serving-profile] stage_totals: {stage_parts}")
     return recommendations
