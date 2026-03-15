@@ -120,6 +120,45 @@ FEEDBACK_STRONG_BOOST = 0.75
 FEEDBACK_WEAK_PENALTY = 0.45
 FEEDBACK_TRASH_PENALTY = 1.00
 SERVING_PROFILING_ENV = "QEU_SERVING_PROFILE"
+INTENT_SNACK = "snack"
+INTENT_DESSERT = "dessert"
+INTENT_STAPLES = "staples"
+INTENT_PREPARATION = "preparation"
+INTENT_MEAL_BASE = "meal_base"
+INTENT_DRINK_PAIRING = "drink_pairing"
+INTENT_CLEANING = "cleaning"
+BUNDLE_INTENTS = (
+    INTENT_SNACK,
+    INTENT_DESSERT,
+    INTENT_STAPLES,
+    INTENT_PREPARATION,
+    INTENT_MEAL_BASE,
+    INTENT_DRINK_PAIRING,
+    INTENT_CLEANING,
+)
+INTENT_ASSIGNMENT_PRECEDENCE = (
+    INTENT_CLEANING,
+    INTENT_MEAL_BASE,
+    INTENT_PREPARATION,
+    INTENT_STAPLES,
+    INTENT_DRINK_PAIRING,
+    INTENT_DESSERT,
+    INTENT_SNACK,
+)
+INTENT_PRIOR_WEIGHTS: dict[str, float] = {
+    INTENT_SNACK: 0.16,
+    INTENT_DESSERT: 0.15,
+    INTENT_STAPLES: 0.18,
+    INTENT_PREPARATION: 0.14,
+    INTENT_MEAL_BASE: 0.20,
+    INTENT_DRINK_PAIRING: 0.10,
+    INTENT_CLEANING: 0.07,
+}
+INTENT_PROFILE_PRIOR_STRENGTH = 2.0
+INTENT_BOOST_WEIGHT = 0.10
+INTENT_BOOST_MAX = 0.08
+INTENT_DIVERSITY_MAX_PER_PERSON = 2
+INTENT_DIVERSITY_CONCENTRATION_THRESHOLD = 0.60
 USE_NEW_BUNDLE_SEMANTICS = str(os.getenv("QEU_USE_NEW_BUNDLE_SEMANTICS", "1")).strip().lower() not in {
     "0",
     "false",
@@ -520,6 +559,115 @@ MOTIF_HINTS_MILK_TEA = frozenset({"tea", "coffee", "milk", "evaporated milk", "t
 MOTIF_HINTS_DATES_MILK = frozenset({"milk", "evaporated milk", "condensed milk", "fresh cream", "qishta"})
 MOTIF_HINTS_TOMATO_BASE = frozenset({"tomato paste", "tomato sauce", "ketchup"})
 MOTIF_HINTS_CRUNCHY_SNACK = frozenset({"chips", "crisps", "cracker", "crackers", "nachos", "spring roll chips"})
+INTENT_SNACK_HINTS = frozenset(
+    {
+        "biscuit",
+        "biscuits",
+        "cookie",
+        "cookies",
+        "wafer",
+        "crackers",
+        "cracker",
+        "chips",
+        "chocolate",
+        "candy",
+        "popcorn",
+        "nuts",
+        "snack",
+    }
+)
+INTENT_DESSERT_HINTS = frozenset(
+    {
+        "dessert",
+        "caramel",
+        "custard",
+        "cake",
+        "brownie",
+        "condensed milk",
+        "cream caramel",
+        "pudding",
+        "jelly",
+        "sweet",
+        "qishta",
+    }
+)
+INTENT_STAPLE_HINTS = frozenset(
+    {
+        "rice",
+        "eggs",
+        "egg",
+        "tuna",
+        "oats",
+        "oil",
+        "flour",
+        "sugar",
+        "salt",
+        "water",
+        "tomato paste",
+    }
+)
+INTENT_PREPARATION_HINTS = frozenset(
+    {
+        "sauce",
+        "ketchup",
+        "mayo",
+        "mayonnaise",
+        "dip",
+        "paste",
+        "stock",
+        "seasoning",
+        "bouillon",
+        "masala",
+        "tortilla",
+        "wrap",
+    }
+)
+INTENT_MEAL_BASE_HINTS = frozenset(
+    {
+        "chicken",
+        "meat",
+        "beef",
+        "lamb",
+        "fish",
+        "tuna",
+        "rice",
+        "eggs",
+        "bread",
+        "tortilla",
+        "pasta",
+        "noodle",
+        "noodles",
+    }
+)
+INTENT_DRINK_HINTS = frozenset(
+    {
+        "tea",
+        "coffee",
+        "milk",
+        "evaporated milk",
+        "tea milk",
+        "juice",
+        "soda",
+        "drink",
+        "chocolate milk",
+    }
+)
+INTENT_CLEANING_HINTS = frozenset(
+    {
+        "detergent",
+        "softener",
+        "dish",
+        "dishwashing",
+        "sponge",
+        "disinfectant",
+        "bleach",
+        "toilet cleaner",
+        "cleaner",
+        "wipes",
+        "brush",
+        "tissue",
+    }
+)
 SHOPPER_FAMILY_BASE_ADJUSTMENT: dict[str, float] = {
     "meal:chicken_wrap_meal": 0.20,
     "meal:nuggets_bread_fastmeal": 0.22,
@@ -2591,6 +2739,231 @@ def _pair_matches_hints(text_a: str, text_b: str, left_hints: frozenset[str], ri
         (_text_has_any_hint(text_a, left_hints) and _text_has_any_hint(text_b, right_hints))
         or (_text_has_any_hint(text_b, left_hints) and _text_has_any_hint(text_a, right_hints))
     )
+
+
+def _default_intent_profile() -> dict[str, float]:
+    priors = {str(intent): float(INTENT_PRIOR_WEIGHTS.get(str(intent), 0.0)) for intent in BUNDLE_INTENTS}
+    total = float(sum(max(0.0, value) for value in priors.values()))
+    if total <= 0.0:
+        return {str(intent): float(1.0 / len(BUNDLE_INTENTS)) for intent in BUNDLE_INTENTS}
+    return {str(intent): float(max(0.0, priors[intent]) / total) for intent in BUNDLE_INTENTS}
+
+
+def _normalise_intent_profile(raw_scores: dict[str, float]) -> dict[str, float]:
+    base = {str(intent): float(max(0.0, raw_scores.get(str(intent), 0.0))) for intent in BUNDLE_INTENTS}
+    total = float(sum(base.values()))
+    if total <= 1e-9:
+        return _default_intent_profile()
+    return {intent: float(base[intent] / total) for intent in BUNDLE_INTENTS}
+
+
+def _top_intent(profile_weights: dict[str, float]) -> tuple[str, float]:
+    if not profile_weights:
+        default_profile = _default_intent_profile()
+        top_key = max(BUNDLE_INTENTS, key=lambda intent: float(default_profile.get(intent, 0.0)))
+        return str(top_key), float(default_profile.get(top_key, 0.0))
+    top_key = max(BUNDLE_INTENTS, key=lambda intent: float(profile_weights.get(intent, 0.0)))
+    return str(top_key), float(profile_weights.get(top_key, 0.0))
+
+
+def _item_intent_scores(
+    *,
+    name: str,
+    category: str,
+    family: str,
+    groups: set[str],
+    nonfood: bool,
+) -> dict[str, float]:
+    scores = {str(intent): 0.0 for intent in BUNDLE_INTENTS}
+    text = " ".join(part for part in (_normalise_text(name), _normalise_text(category), _normalise_text(family)) if part)
+    union = set(groups)
+
+    snack_groups = {GROUP_SNACKS, GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS}
+    drink_groups = {GROUP_TEA, GROUP_COFFEE, GROUP_MILK, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}
+    dessert_groups = {GROUP_SWEETS, GROUP_DATES, GROUP_CREAM, GROUP_CHOCOLATE, GROUP_COOKIES, GROUP_CANDY}
+    meal_groups = {GROUP_PROTEIN, GROUP_RICE_GRAINS, GROUP_BREAD_CARB, GROUP_NOODLES_PASTA}
+    cleaning_groups = {
+        GROUP_NONFOOD_CLEANING,
+        GROUP_NONFOOD_HAIR,
+        GROUP_NONFOOD_BODY,
+        GROUP_NONFOOD_TISSUE,
+        GROUP_NONFOOD_OTHER,
+    }
+
+    if nonfood or bool(union & cleaning_groups) or _text_has_any_hint(text, INTENT_CLEANING_HINTS):
+        scores[INTENT_CLEANING] += 2.8
+    if bool(union & snack_groups) or _text_has_any_hint(text, INTENT_SNACK_HINTS):
+        scores[INTENT_SNACK] += 1.6
+    if bool(union & dessert_groups) or _text_has_any_hint(text, INTENT_DESSERT_HINTS):
+        scores[INTENT_DESSERT] += 1.4
+    if _text_has_any_hint(text, INTENT_STAPLE_HINTS):
+        scores[INTENT_STAPLES] += 1.6
+    if _text_has_any_hint(text, INTENT_PREPARATION_HINTS) or GROUP_SPICES in union:
+        scores[INTENT_PREPARATION] += 1.3
+    if bool(union & meal_groups) or _text_has_any_hint(text, INTENT_MEAL_BASE_HINTS):
+        scores[INTENT_MEAL_BASE] += 1.2
+    if bool(union & drink_groups) or _text_has_any_hint(text, INTENT_DRINK_HINTS):
+        scores[INTENT_DRINK_PAIRING] += 1.3
+    return scores
+
+
+def _build_user_intent_profile(profile: PersonProfile, context: PersonalizationContext) -> dict[str, float]:
+    history = [int(pid) for pid in profile.history_product_ids if int(pid) > 0]
+    if not history:
+        return _default_intent_profile()
+
+    raw_scores = {str(intent): 0.0 for intent in BUNDLE_INTENTS}
+    total_items = float(max(1, len(history)))
+    for idx, pid in enumerate(history):
+        name = _product_name(pid, context)
+        category = _product_category(pid, context)
+        family = _product_family(pid, context)
+        groups = _group_labels_from_text(name, category, family)
+        count = float(max(1.0, float(profile.history_counts.get(int(pid), 1.0))))
+        recency_weight = 0.75 + 0.5 * float((idx + 1.0) / total_items)
+        frequency_weight = math.sqrt(count)
+        total_weight = float(recency_weight * frequency_weight)
+        item_scores = _item_intent_scores(
+            name=name,
+            category=category,
+            family=family,
+            groups=groups,
+            nonfood=bool(_is_nonfood_product(pid, context)),
+        )
+        for intent in BUNDLE_INTENTS:
+            raw_scores[intent] = float(raw_scores.get(intent, 0.0)) + float(item_scores.get(intent, 0.0)) * total_weight
+
+    priors = _default_intent_profile()
+    for intent in BUNDLE_INTENTS:
+        raw_scores[intent] = float(raw_scores.get(intent, 0.0)) + float(INTENT_PROFILE_PRIOR_STRENGTH) * float(priors[intent])
+    return _normalise_intent_profile(raw_scores)
+
+
+def _bundle_primary_intent(
+    candidate: dict[str, object],
+    context: PersonalizationContext,
+    lane_hint: str | None = None,
+) -> str:
+    existing = str(candidate.get("primary_intent", "")).strip().lower()
+    if existing in BUNDLE_INTENTS:
+        return existing
+    (
+        anchor,
+        complement,
+        name_a,
+        name_b,
+        cat_a,
+        cat_b,
+        fam_a,
+        fam_b,
+        pair_row,
+    ) = _candidate_pair_fields(candidate, context)
+    lane = str(lane_hint or candidate.get("lane", "")).strip().lower()
+    text_a = semantics.normalize_product_text(name_a, cat_a, fam_a)
+    text_b = semantics.normalize_product_text(name_b, cat_b, fam_b)
+    groups_a = _group_labels_from_text(name_a, cat_a, fam_a)
+    groups_b = _group_labels_from_text(name_b, cat_b, fam_b)
+    union = set(groups_a) | set(groups_b)
+    nonfood_a = _is_nonfood_product(anchor, context, row=pair_row, side="a")
+    nonfood_b = _is_nonfood_product(complement, context, row=pair_row, side="b")
+
+    scores = {str(intent): 0.0 for intent in BUNDLE_INTENTS}
+    if lane == LANE_NONFOOD:
+        scores[INTENT_CLEANING] += 2.0
+    elif lane == LANE_SNACK:
+        scores[INTENT_SNACK] += 0.9
+        scores[INTENT_DRINK_PAIRING] += 0.2
+        scores[INTENT_DESSERT] += 0.2
+    elif lane == LANE_OCCASION:
+        scores[INTENT_DRINK_PAIRING] += 0.9
+        scores[INTENT_DESSERT] += 0.5
+    else:
+        scores[INTENT_MEAL_BASE] += 0.8
+        scores[INTENT_PREPARATION] += 0.4
+        scores[INTENT_STAPLES] += 0.3
+
+    if lane == LANE_NONFOOD or (nonfood_a and nonfood_b):
+        scores[INTENT_CLEANING] += 3.5
+
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_MILK | HUMAN_HINTS_EVAP_MILK):
+        scores[INTENT_DRINK_PAIRING] += 2.2
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_MILK | HUMAN_HINTS_TEA | HUMAN_HINTS_COFFEE, HUMAN_HINTS_BISCUITS):
+        scores[INTENT_DRINK_PAIRING] += 1.8
+        scores[INTENT_SNACK] += 0.8
+    if bool(union & {GROUP_TEA, GROUP_COFFEE, GROUP_MILK, GROUP_SODA, GROUP_JUICE, GROUP_BEVERAGES}) and bool(
+        union & {GROUP_SNACKS, GROUP_CHIPS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CRACKERS}
+    ):
+        scores[INTENT_DRINK_PAIRING] += 1.4
+
+    if _pair_matches_hints(text_a, text_b, FINAL_QUALITY_DESSERT_HINTS | HUMAN_HINTS_CONDENSED_MILK, HUMAN_HINTS_CREAM_TOKEN | HUMAN_HINTS_MILK):
+        scores[INTENT_DESSERT] += 2.0
+    if _text_has_any_hint(text_a, INTENT_DESSERT_HINTS) and _text_has_any_hint(text_b, INTENT_DESSERT_HINTS):
+        scores[INTENT_DESSERT] += 1.6
+    if bool(union & {GROUP_SWEETS, GROUP_DATES, GROUP_CREAM, GROUP_CHOCOLATE, GROUP_COOKIES, GROUP_CANDY}):
+        scores[INTENT_DESSERT] += 0.8
+
+    if _text_has_any_hint(text_a, INTENT_SNACK_HINTS) and _text_has_any_hint(text_b, INTENT_SNACK_HINTS):
+        scores[INTENT_SNACK] += 1.9
+    if bool(union & {GROUP_SNACKS, GROUP_CHIPS, GROUP_CRACKERS, GROUP_COOKIES, GROUP_CHOCOLATE, GROUP_CANDY, GROUP_NUTS}):
+        scores[INTENT_SNACK] += 1.0
+
+    if _pair_matches_hints(
+        text_a,
+        text_b,
+        FINAL_QUALITY_TUNA_HINTS | HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS,
+        HUMAN_HINTS_SAUCE | MOTIF_HINTS_TOMATO_BASE | HUMAN_HINTS_TORTILLA | HUMAN_HINTS_BREAD | HUMAN_HINTS_STOCK,
+    ):
+        scores[INTENT_PREPARATION] += 1.9
+    if _text_has_any_hint(text_a, INTENT_PREPARATION_HINTS) or _text_has_any_hint(text_b, INTENT_PREPARATION_HINTS):
+        scores[INTENT_PREPARATION] += 0.7
+
+    if _pair_matches_hints(
+        text_a,
+        text_b,
+        HUMAN_HINTS_CHICKEN | HUMAN_HINTS_MEAT | HUMAN_HINTS_FISH | HUMAN_HINTS_EGGS,
+        HUMAN_HINTS_RICE | HUMAN_HINTS_BREAD | HUMAN_HINTS_TORTILLA | frozenset({"pasta", "noodles", "noodle"}),
+    ):
+        scores[INTENT_MEAL_BASE] += 2.0
+    if bool(union & {GROUP_PROTEIN}) and bool(union & {GROUP_RICE_GRAINS, GROUP_BREAD_CARB, GROUP_NOODLES_PASTA}):
+        scores[INTENT_MEAL_BASE] += 1.2
+
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE, FINAL_QUALITY_TUNA_HINTS):
+        scores[INTENT_STAPLES] += 2.3
+    if _pair_matches_hints(text_a, text_b, HUMAN_HINTS_RICE | HUMAN_HINTS_EGGS, HUMAN_HINTS_RICE | HUMAN_HINTS_EGGS | FINAL_QUALITY_TUNA_HINTS):
+        scores[INTENT_STAPLES] += 1.4
+    if _text_has_any_hint(text_a, INTENT_STAPLE_HINTS) and _text_has_any_hint(text_b, INTENT_STAPLE_HINTS):
+        scores[INTENT_STAPLES] += 1.3
+    if _text_has_any_hint(text_a, INTENT_STAPLE_HINTS) or _text_has_any_hint(text_b, INTENT_STAPLE_HINTS):
+        scores[INTENT_STAPLES] += 0.5
+
+    ranked = sorted(
+        BUNDLE_INTENTS,
+        key=lambda intent: (
+            -float(scores.get(intent, 0.0)),
+            INTENT_ASSIGNMENT_PRECEDENCE.index(intent),
+            BUNDLE_INTENTS.index(intent),
+        ),
+    )
+    top = str(ranked[0])
+    if float(scores.get(top, 0.0)) <= 0.0:
+        if lane == LANE_NONFOOD:
+            return INTENT_CLEANING
+        if lane == LANE_SNACK:
+            return INTENT_SNACK
+        if lane == LANE_OCCASION:
+            return INTENT_DRINK_PAIRING
+        return INTENT_MEAL_BASE
+    return top
+
+
+def _intent_profile_boost(intent: str, user_intent_profile: dict[str, float]) -> float:
+    intent_key = str(intent).strip().lower()
+    if intent_key not in BUNDLE_INTENTS:
+        return 0.0
+    score = float(user_intent_profile.get(intent_key, 0.0))
+    centered = float(score - (1.0 / max(1, len(BUNDLE_INTENTS))))
+    boost = float(INTENT_BOOST_WEIGHT * centered)
+    return float(max(-INTENT_BOOST_MAX, min(INTENT_BOOST_MAX, boost)))
 
 
 def _candidate_family_pattern_signature(candidate: dict[str, object], context: PersonalizationContext) -> str:
@@ -6900,6 +7273,8 @@ def build_recommendations_for_profiles(
         profile_family_interest = _profile_family_interest(profile, context)
         profile_category_affinity = _profile_category_affinity(profile, context)
         profile_shopper_family_interest = _profile_shopper_family_interest(profile, context)
+        user_intent_profile = _build_user_intent_profile(profile, context)
+        user_top_intent, user_top_intent_weight = _top_intent(user_intent_profile)
         candidate_pool: dict[tuple[str, int, int, str], dict[str, object]] = {}
         local_duplicate_blocked = 0
         candidate_started = time.perf_counter()
@@ -6925,8 +7300,9 @@ def build_recommendations_for_profiles(
             key = (str(lane_name), int(anchor_id), int(complement_id), source)
             candidate = dict(choice)
             candidate["lane"] = str(lane_name)
+            candidate["primary_intent"] = _bundle_primary_intent(candidate, context, lane_hint=str(lane_name))
             candidate["base_score"] = float(score_value)
-            candidate["personalization_boost"] = float(
+            base_personalization_boost = float(
                 _candidate_personalization_boost(
                     candidate,
                     profile,
@@ -6941,6 +7317,8 @@ def build_recommendations_for_profiles(
                     profile_shopper_family_interest=profile_shopper_family_interest,
                 )
             )
+            intent_boost = _intent_profile_boost(str(candidate.get("primary_intent", "")), user_intent_profile)
+            candidate["personalization_boost"] = float(base_personalization_boost + intent_boost)
             candidate["pool_score"] = float(candidate["base_score"]) + float(candidate["personalization_boost"])
             candidate["motif_family_signature"] = _candidate_motif_family_signature(candidate, context)
             candidate["family_pattern_signature"] = _candidate_family_pattern_signature(candidate, context)
@@ -7027,8 +7405,10 @@ def build_recommendations_for_profiles(
         selected_choices: list[dict[str, object]] = []
         selected_anchors: set[int] = set()
         selected_pairs: set[tuple[int, int]] = set()
+        selected_item_ids: set[int] = set()
         cleaning_count = 0
         selected_fallback_motif_counts: dict[str, int] = {}
+        selected_intent_counts: dict[str, int] = {}
 
         scoring_started = time.perf_counter()
         enriched_candidates: list[dict[str, object]] = []
@@ -7133,7 +7513,7 @@ def build_recommendations_for_profiles(
         )
         profiling.add_stage("scoring_ranking", time.perf_counter() - scoring_started)
 
-        def _try_select(candidate: dict[str, object], *, allow_cleaning: bool) -> bool:
+        def _try_select(candidate: dict[str, object], *, allow_cleaning: bool, intent_cap_override: bool = False) -> bool:
             nonlocal cleaning_count
             anchor_id = int(_safe_int(candidate.get("anchor"), default=-1))
             complement_id = int(_safe_int(candidate.get("complement"), default=-1))
@@ -7153,8 +7533,25 @@ def build_recommendations_for_profiles(
                 _record_serving_telemetry(serving_telemetry, lane_name, "rejected_final_human_quality")
                 return False
             pair_key = _pair_key(anchor_id, complement_id)
-            if anchor_id in selected_anchors or pair_key in selected_pairs:
+            if (
+                anchor_id in selected_anchors
+                or anchor_id in selected_item_ids
+                or complement_id in selected_item_ids
+                or pair_key in selected_pairs
+            ):
                 return False
+            intent_key = str(candidate.get("primary_intent", "")).strip().lower()
+            if intent_key not in BUNDLE_INTENTS:
+                intent_key = _bundle_primary_intent(candidate, context, lane_hint=lane_name)
+                candidate["primary_intent"] = intent_key
+            if not intent_cap_override and intent_key in BUNDLE_INTENTS:
+                already_selected = int(selected_intent_counts.get(intent_key, 0))
+                concentrated_preference = bool(
+                    intent_key == user_top_intent and float(user_top_intent_weight) >= float(INTENT_DIVERSITY_CONCENTRATION_THRESHOLD)
+                )
+                if already_selected >= int(INTENT_DIVERSITY_MAX_PER_PERSON) and not concentrated_preference:
+                    _record_serving_telemetry(serving_telemetry, lane_name, "rejected_intent_soft_cap")
+                    return False
             is_cleaning = _is_household_bundle(candidate, context)
             if is_cleaning and not allow_cleaning:
                 return False
@@ -7178,6 +7575,10 @@ def build_recommendations_for_profiles(
             selected_choices.append(candidate)
             selected_anchors.add(anchor_id)
             selected_pairs.add(pair_key)
+            selected_item_ids.add(anchor_id)
+            selected_item_ids.add(complement_id)
+            if intent_key in BUNDLE_INTENTS:
+                selected_intent_counts[intent_key] = int(selected_intent_counts.get(intent_key, 0)) + 1
             if is_cleaning:
                 cleaning_count += 1
             if source_group == "fallback_food" and fallback_motif in CONTROLLED_FALLBACK_MOTIFS:
@@ -7213,6 +7614,11 @@ def build_recommendations_for_profiles(
         for candidate in food_candidates:
             if _try_select(candidate, allow_cleaning=False) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
                 break
+
+        if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
+            for candidate in food_candidates:
+                if _try_select(candidate, allow_cleaning=False, intent_cap_override=True) and len(selected_choices) >= MAX_BUNDLES_PER_PERSON:
+                    break
 
         if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
             cleaning_history_ids = {
@@ -7255,7 +7661,9 @@ def build_recommendations_for_profiles(
                 enriched["source"] = str(fallback_source)
                 enriched["lane"] = LANE_NONFOOD
                 enriched["base_score"] = float(personal_score)
-                enriched["pool_score"] = float(personal_score)
+                enriched["primary_intent"] = _bundle_primary_intent(enriched, context, lane_hint=LANE_NONFOOD)
+                intent_boost = _intent_profile_boost(str(enriched.get("primary_intent", "")), user_intent_profile)
+                enriched["pool_score"] = float(personal_score + intent_boost)
                 enriched["effective_score"] = _candidate_effective_score(
                     enriched,
                     context,

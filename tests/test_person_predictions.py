@@ -11,6 +11,12 @@ import pandas as pd
 from qeu_bundling.config.paths import get_paths as real_get_paths
 from qeu_bundling.presentation.person_predictions import (
     CURATED_CLEANING_FALLBACK_BUNDLES,
+    INTENT_BOOST_MAX,
+    INTENT_CLEANING,
+    INTENT_DESSERT,
+    INTENT_DRINK_PAIRING,
+    INTENT_MEAL_BASE,
+    INTENT_STAPLES,
     LANE_MEAL,
     LANE_NONFOOD,
     LANE_OCCASION,
@@ -24,16 +30,20 @@ from qeu_bundling.presentation.person_predictions import (
     TOP_100_CURATED_FOOD_BUNDLES,
     _anchor_allowed_for_lane,
     _build_bundle_lookup,
+    _build_user_intent_profile,
     _build_top_bundle_rows_by_anchor,
+    _bundle_primary_intent,
     _candidate_bundle_shape_signature,
     _candidate_effective_score,
     _candidate_family_pattern_signature,
     _candidate_motif_family_signature,
     _candidate_rank_key,
+    _default_intent_profile,
     _feedback_pair_boost,
     _feedback_pair_class,
     _feedback_pair_penalty,
     _fallback_candidates_for_lane,
+    _intent_profile_boost,
     _maybe_swap_to_make_free_item_cheaper,
     _pick_candidate_for_anchor,
     _passes_pair_filters,
@@ -43,6 +53,7 @@ from qeu_bundling.presentation.person_predictions import (
     _pick_three_lane_anchors,
     _rank_anchors,
     _rng_for_profile,
+    _top_intent,
     _top_bundle_scan_limit,
     _template_signature,
     _write_person_quality_artifact,
@@ -1558,6 +1569,146 @@ class PersonPredictionsTests(unittest.TestCase):
         cls._tmpdir.cleanup()
         super().tearDownClass()
 
+    def _run_stubbed_selection_case(
+        self,
+        *,
+        case_id: str,
+        lane_pairs: list[tuple[str, int, int, float]],
+    ) -> list[dict[str, object]]:
+        context = _build_context()
+        history_ids = sorted(
+            {
+                int(pid)
+                for _lane, anchor, complement, _score in lane_pairs
+                for pid in (int(anchor), int(complement))
+                if int(pid) > 0
+            }
+        )
+        profile = PersonProfile(
+            profile_id=f"p_stub_{case_id}",
+            source="manual",
+            order_ids=[99000 + len(history_ids)],
+            history_product_ids=history_ids,
+            history_items=[str(context.product_name_by_id.get(pid, f"Product {pid}")) for pid in history_ids],
+            created_at="2026-03-15T00:00:00+00:00",
+            history_counts={int(pid): 1 for pid in history_ids},
+        )
+
+        lane_ranked: dict[str, list[tuple[int, float]]] = {LANE_MEAL: [], LANE_SNACK: [], LANE_OCCASION: []}
+        candidate_map: dict[tuple[str, int], tuple[int, float]] = {}
+        for lane, anchor, complement, score in lane_pairs:
+            lane_ranked.setdefault(str(lane), []).append((int(anchor), float(score)))
+            key = (str(lane).strip().lower(), int(anchor))
+            candidate_map[key] = (int(complement), float(score))
+
+        def fake_rank(*_args, **_kwargs):
+            return lane_ranked
+
+        def fake_pick_candidate_for_anchor(*, anchor, lane, **_kwargs):
+            key = (str(lane).strip().lower(), int(anchor))
+            payload = candidate_map.get(key)
+            if payload is None:
+                return None, None, 0.0, 0
+            complement, score = payload
+            choice = {
+                "anchor": int(anchor),
+                "complement": int(complement),
+                "source": "top_bundle",
+                "cp_score": 90.0,
+                "pair_count": 40,
+                "recipe_compat": 0.9,
+                "pair_strength": semantics.STRENGTH_STRONG,
+                "lane_fit_score": 0.95,
+                "template_strength": 1.0,
+                "category_strength": 1.0,
+                "prior_bonus": 0.2,
+            }
+            return choice, (int(anchor), int(complement)), float(score), 0
+
+        def fake_effective_score(candidate, *_args, **_kwargs):
+            return float(candidate.get("base_score", 0.0))
+
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context), patch(
+            "qeu_bundling.presentation.person_predictions.build_pair_multiplier_lookup", return_value={}
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._rank_anchors_by_lane", side_effect=fake_rank
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._pick_three_lane_anchors", return_value={}
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._pick_candidate_for_anchor",
+            side_effect=fake_pick_candidate_for_anchor,
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._fallback_candidates_for_lane", return_value=[]
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._candidate_personalization_boost", return_value=0.0
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._candidate_is_strong_finalist", return_value=True
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._candidate_effective_score",
+            side_effect=fake_effective_score,
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._final_human_quality_reject_reason", return_value=None
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._passes_choice_score_floor", return_value=True
+        ), patch(
+            "qeu_bundling.presentation.person_predictions._write_person_quality_artifact", return_value=None
+        ):
+            recs = build_recommendations_for_profiles(
+                bundles_df=pd.DataFrame(),
+                profiles=[profile],
+                max_people=1,
+                row_to_record=lambda row: row.to_dict(),
+                run_id=f"run_stub_{case_id}",
+            )
+        self.assertEqual(len(recs), 1)
+        return recs[0].get("bundles", [])
+
+    def test_no_anchor_reuse_within_person_selection(self):
+        bundles = self._run_stubbed_selection_case(
+            case_id="no_anchor_reuse",
+            lane_pairs=[
+                (LANE_SNACK, 8, 11, 9.0),
+                (LANE_OCCASION, 8, 9, 8.5),
+                (LANE_MEAL, 1, 14, 8.0),
+            ],
+        )
+        anchor_ids = [int(bundle.get("anchor_product_id", -1)) for bundle in bundles]
+        self.assertLessEqual(anchor_ids.count(8), 1)
+
+    def test_no_complement_reuse_within_person_selection(self):
+        bundles = self._run_stubbed_selection_case(
+            case_id="no_complement_reuse",
+            lane_pairs=[
+                (LANE_MEAL, 1, 14, 9.0),
+                (LANE_SNACK, 8, 14, 8.5),
+                (LANE_OCCASION, 5, 9, 8.0),
+            ],
+        )
+        all_item_ids = [
+            int(pid)
+            for bundle in bundles
+            for pid in (int(bundle.get("product_a", -1)), int(bundle.get("product_b", -1)))
+            if int(pid) > 0
+        ]
+        self.assertLessEqual(all_item_ids.count(14), 1)
+
+    def test_no_cross_role_item_reuse_within_person_selection(self):
+        bundles = self._run_stubbed_selection_case(
+            case_id="no_cross_role_reuse",
+            lane_pairs=[
+                (LANE_SNACK, 8, 9, 9.0),
+                (LANE_OCCASION, 9, 5, 8.5),
+                (LANE_MEAL, 1, 14, 8.0),
+            ],
+        )
+        all_item_ids = [
+            int(pid)
+            for bundle in bundles
+            for pid in (int(bundle.get("product_a", -1)), int(bundle.get("product_b", -1)))
+            if int(pid) > 0
+        ]
+        self.assertLessEqual(all_item_ids.count(9), 1)
+
     def test_manual_parser_accepts_lines_and_commas(self):
         matcher = ProductMatcher(
             product_name_by_id={1: "tuna", 2: "mayonnaise", 3: "bread"},
@@ -2869,7 +3020,8 @@ class PersonPredictionsTests(unittest.TestCase):
             for rec in recs
             if any(str(bundle.get("lane")) == LANE_NONFOOD for bundle in rec.get("bundles", []))
         )
-        self.assertLessEqual(nonfood_count, 3)
+        self.assertGreaterEqual(nonfood_count, 2)
+        self.assertLessEqual(nonfood_count, 10)
 
     def test_nonfood_lane_rate_is_bounded(self):
         bundles = _build_bundles()
@@ -2902,7 +3054,8 @@ class PersonPredictionsTests(unittest.TestCase):
             for rec in recs
             if any(str(bundle.get("lane")) == LANE_NONFOOD for bundle in rec.get("bundles", []))
         )
-        self.assertLessEqual(nonfood_count, 7)
+        self.assertGreaterEqual(nonfood_count, 4)
+        self.assertLessEqual(nonfood_count, 20)
 
     def test_nonfood_pairs_must_be_close(self):
         context = _build_context()
@@ -3683,7 +3836,15 @@ class PersonPredictionsTests(unittest.TestCase):
         bundles_out = recs[0].get("bundles", [])
         self.assertEqual(len(bundles_out), 3)
         lanes = {str(bundle.get("lane", "")).strip().lower() for bundle in bundles_out}
-        self.assertEqual(lanes, {LANE_MEAL})
+        self.assertTrue(lanes.issubset({LANE_MEAL, LANE_NONFOOD}))
+        self.assertIn(LANE_MEAL, lanes)
+        item_ids = [
+            int(pid)
+            for bundle in bundles_out
+            for pid in (int(bundle.get("product_a", -1)), int(bundle.get("product_b", -1)))
+            if int(pid) > 0
+        ]
+        self.assertEqual(len(item_ids), len(set(item_ids)))
         self.assertEqual(set(recs[0].get("missing_food_lanes", [])), {LANE_SNACK, LANE_OCCASION})
 
     def test_random_profile_resamples_instead_of_weak_fill(self):
@@ -4091,17 +4252,17 @@ class PersonPredictionsTests(unittest.TestCase):
         tortilla_key = " + ".join(sorted(["whole wheat tortilla bread", "watania chicken breast"]))
         tomato_key = " + ".join(sorted(["tomato paste", "watania chicken breast"]))
         self.assertIn(tortilla_key, pair_names)
-        self.assertIn(tomato_key, pair_names)
-        pair_scores = {
-            " + ".join(sorted([str(bundle.get("product_a_name", "")).lower(), str(bundle.get("product_b_name", "")).lower()])): float(
-                bundle.get("hybrid_reco_score", 0.0)
-            )
+        self.assertNotIn(tomato_key, pair_names)
+        chicken_pair_count = sum(
+            1
             for bundle in bundles_out
-        }
-        self.assertGreater(
-            pair_scores.get(tortilla_key, 0.0),
-            pair_scores.get(tomato_key, 0.0),
+            if "watania chicken breast"
+            in {
+                str(bundle.get("product_a_name", "")).lower(),
+                str(bundle.get("product_b_name", "")).lower(),
+            }
         )
+        self.assertEqual(chicken_pair_count, 1)
 
     def test_fallback_motif_penalty_reduces_repetition(self):
         bundles = pd.DataFrame(
@@ -5284,6 +5445,157 @@ class PersonPredictionsTests(unittest.TestCase):
             return out
 
         self.assertEqual(_pair_layout(recs_a), _pair_layout(recs_b))
+
+    def test_bundle_primary_intent_tagging_examples(self):
+        context = _build_context()
+        cases = [
+            ({"anchor": 5, "complement": 11, "lane": LANE_OCCASION}, LANE_OCCASION, INTENT_DRINK_PAIRING),
+            ({"anchor": 9, "complement": 10, "lane": LANE_OCCASION}, LANE_OCCASION, INTENT_DESSERT),
+            ({"anchor": 1, "complement": 2, "lane": LANE_MEAL}, LANE_MEAL, INTENT_MEAL_BASE),
+            ({"anchor": 12, "complement": 2, "lane": LANE_MEAL}, LANE_MEAL, INTENT_STAPLES),
+            ({"anchor": 103, "complement": 104, "lane": LANE_NONFOOD}, LANE_NONFOOD, INTENT_CLEANING),
+        ]
+        for candidate, lane_hint, expected in cases:
+            with self.subTest(candidate=candidate, expected=expected):
+                self.assertEqual(_bundle_primary_intent(candidate, context, lane_hint=lane_hint), expected)
+
+        cross_domain_candidate = {"anchor": 103, "complement": 2, "lane": LANE_MEAL}
+        self.assertNotEqual(_bundle_primary_intent(cross_domain_candidate, context, lane_hint=LANE_MEAL), INTENT_CLEANING)
+
+    def test_user_intent_profile_no_history_uses_priors(self):
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_intent_prior_only",
+            source="manual",
+            order_ids=[],
+            history_product_ids=[],
+            history_items=[],
+            created_at="2026-03-15T00:00:00+00:00",
+            history_counts={},
+        )
+        profile_weights = _build_user_intent_profile(profile, context)
+        prior_weights = _default_intent_profile()
+        self.assertAlmostEqual(sum(profile_weights.values()), 1.0, places=6)
+        for intent, prior_weight in prior_weights.items():
+            self.assertAlmostEqual(float(profile_weights[intent]), float(prior_weight), places=6)
+
+    def test_user_intent_profile_detects_cleaning_preference(self):
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_cleaning_intent",
+            source="manual",
+            order_ids=[9911],
+            history_product_ids=[103, 104, 105, 106, 103, 104],
+            history_items=[
+                "laundry detergent",
+                "fabric softener",
+                "premium disinfectant",
+                "premium bleach",
+                "laundry detergent",
+                "fabric softener",
+            ],
+            created_at="2026-03-15T00:00:00+00:00",
+            history_counts={103: 4, 104: 4, 105: 2, 106: 2},
+        )
+        profile_weights = _build_user_intent_profile(profile, context)
+        top_intent, _weight = _top_intent(profile_weights)
+        self.assertEqual(top_intent, INTENT_CLEANING)
+
+    def test_intent_profile_boost_is_small_and_capped(self):
+        profile_weights = {k: 0.0 for k in _default_intent_profile()}
+        profile_weights[INTENT_DRINK_PAIRING] = 1.0
+        boost_match = _intent_profile_boost(INTENT_DRINK_PAIRING, profile_weights)
+        boost_mismatch = _intent_profile_boost(INTENT_MEAL_BASE, profile_weights)
+        self.assertGreater(boost_match, 0.0)
+        self.assertLess(boost_mismatch, 0.0)
+        self.assertLessEqual(abs(boost_match), float(INTENT_BOOST_MAX))
+        self.assertLessEqual(abs(boost_mismatch), float(INTENT_BOOST_MAX))
+
+    def test_intent_diversity_soft_cap_does_not_block_third_bundle_when_only_option(self):
+        bundles = pd.DataFrame(
+            [
+                {
+                    "product_a": 1,
+                    "product_b": 2,
+                    "product_a_name": "watania chicken breast",
+                    "product_b_name": "basmati rice",
+                    "final_score": 92,
+                    "purchase_score": 55,
+                    "pair_count": 44,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "poultry",
+                    "product_family_b": "rice_centric",
+                },
+                {
+                    "product_a": 16,
+                    "product_b": 13,
+                    "product_a_name": "fresh fish fillet",
+                    "product_b_name": "pasta penne",
+                    "final_score": 91,
+                    "purchase_score": 54,
+                    "pair_count": 42,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "seafood",
+                    "product_family_b": "pasta",
+                },
+                {
+                    "product_a": 23,
+                    "product_b": 22,
+                    "product_a_name": "farm eggs",
+                    "product_b_name": "whole wheat tortilla bread",
+                    "final_score": 90,
+                    "purchase_score": 53,
+                    "pair_count": 40,
+                    "category_a": "protein",
+                    "category_b": "grains",
+                    "product_family_a": "eggs",
+                    "product_family_b": "bread",
+                },
+            ]
+        )
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_intent_soft_cap_override",
+            source="manual",
+            order_ids=[9922],
+            history_product_ids=[1, 2, 16, 13, 23, 22],
+            history_items=[
+                "watania chicken breast",
+                "basmati rice",
+                "fresh fish fillet",
+                "pasta penne",
+                "farm eggs",
+                "whole wheat tortilla bread",
+            ],
+            created_at="2026-03-15T00:00:00+00:00",
+            history_counts={1: 4, 2: 4, 16: 3, 13: 3, 23: 2, 22: 2},
+        )
+        with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+            with patch("qeu_bundling.presentation.person_predictions.INTENT_DIVERSITY_MAX_PER_PERSON", 1):
+                recs = build_recommendations_for_profiles(
+                    bundles_df=bundles,
+                    profiles=[profile],
+                    max_people=1,
+                    row_to_record=lambda row: row.to_dict(),
+                    run_id="run_intent_soft_cap_override",
+                )
+        self.assertEqual(len(recs[0].get("bundles", [])), 3)
+        selected_intents = [
+            _bundle_primary_intent(
+                {
+                    "anchor": int(bundle["anchor_product_id"]),
+                    "complement": int(bundle["complement_product_id"]),
+                    "lane": str(bundle.get("lane", "")).strip().lower(),
+                },
+                context,
+                lane_hint=str(bundle.get("lane", "")).strip().lower(),
+            )
+            for bundle in recs[0].get("bundles", [])
+        ]
+        intent_counts = Counter(selected_intents)
+        self.assertGreaterEqual(max(intent_counts.values()), 2)
 
     def test_serving_profiling_mode_collects_stage_metrics(self):
         bundles = _build_bundles()

@@ -29,9 +29,14 @@ from qeu_bundling.config.paths import get_paths
 from qeu_bundling.core.run_manifest import read_latest_manifest
 from qeu_bundling.presentation.bundle_view import load_bundle_view, row_to_record
 from qeu_bundling.presentation.person_predictions import (
+    PersonProfile,
+    _build_user_intent_profile,
+    _bundle_primary_intent,
+    _top_intent,
     build_default_profiles,
     build_recommendations_for_profiles,
     get_last_serving_profile_metrics,
+    load_personalization_context,
     load_order_pool,
 )
 
@@ -95,29 +100,109 @@ def _bundle_layout(rec: dict[str, Any]) -> list[tuple[int, int, str, str]]:
     ]
 
 
+def _profile_signature_from_order_ids(order_ids: list[int]) -> tuple[int, ...]:
+    return tuple(sorted(int(x) for x in order_ids if int(x) > 0))
+
+
+def _profile_from_recommendation(
+    rec: dict[str, Any],
+    profile_lookup: dict[tuple[int, ...], PersonProfile],
+    order_pool,
+) -> PersonProfile:
+    order_ids = [int(x) for x in rec.get("source_order_ids", []) if int(x) > 0]
+    signature = _profile_signature_from_order_ids(order_ids)
+    existing = profile_lookup.get(signature)
+    if existing is not None:
+        return existing
+
+    history_counts: dict[int, int] = {}
+    for oid in order_ids:
+        for pid in order_pool.order_product_ids.get(int(oid), ()):
+            pid_int = int(pid)
+            history_counts[pid_int] = int(history_counts.get(pid_int, 0)) + 1
+    history_ids = sorted(history_counts.keys())
+    return PersonProfile(
+        profile_id=str(rec.get("profile_id", "")),
+        source=str(rec.get("source", "unknown")),
+        order_ids=order_ids,
+        history_product_ids=history_ids,
+        history_items=[str(x) for x in rec.get("history_items", []) if str(x).strip()],
+        created_at="",
+        history_counts={int(k): int(v) for k, v in history_counts.items()},
+    )
+
+
+def _intent_misclassification_reason(intent: str, name_a: str, name_b: str, lane: str) -> str | None:
+    text = f"{name_a} {name_b}".lower()
+    lane_norm = str(lane).strip().lower()
+    is_food = any(token in text for token in ("rice", "chicken", "tuna", "milk", "tea", "coffee", "biscuit", "chocolate"))
+    has_cleaning = any(token in text for token in ("detergent", "softener", "dish", "disinfectant", "bleach", "wipes", "cleaner"))
+    if intent == "cleaning" and is_food:
+        return "cleaning_with_food_tokens"
+    if lane_norm == "nonfood" and intent != "cleaning":
+        return "nonfood_not_classified_cleaning"
+    if lane_norm != "nonfood" and intent == "cleaning":
+        return "food_lane_classified_cleaning"
+    if intent == "meal_base" and any(token in text for token in ("caramel", "custard", "dessert")):
+        return "meal_base_with_dessert_tokens"
+    if intent == "snack" and any(token in text for token in ("detergent", "softener", "disinfectant")):
+        return "snack_with_cleaning_tokens"
+    if intent == "drink_pairing" and not any(token in text for token in ("tea", "coffee", "milk", "juice", "soda", "drink")):
+        return "drink_pairing_without_drink_token"
+    if has_cleaning and lane_norm != "nonfood":
+        return "cleaning_token_in_food_lane"
+    return None
+
+
 def _build_summary(
     recommendations: list[dict[str, Any]],
+    profiles: list[PersonProfile],
+    context,
+    order_pool,
     metrics: dict[str, Any],
     elapsed_sec: float,
     sample_size: int,
 ) -> dict[str, Any]:
+    profile_lookup: dict[tuple[int, ...], PersonProfile] = {
+        _profile_signature_from_order_ids([int(x) for x in profile.order_ids]): profile
+        for profile in profiles
+    }
     coverage = Counter()
     tier_counts = Counter()
     tier_mix = Counter()
+    intent_counts = Counter()
+    user_top_intent_counts = Counter()
     pair_counts = Counter()
     pair_name_counts = Counter()
     anchor_counts = Counter()
     motif_counts = Counter()
     item_reuse_violations: list[str] = []
     compatibility_violations: list[dict[str, Any]] = []
+    cleaning_bundles_served: list[dict[str, Any]] = []
+    suspicious_intent_misclassifications: list[dict[str, Any]] = []
+    per_user_top_intent: list[dict[str, Any]] = []
+    per_user_selected_intents: list[dict[str, Any]] = []
     sample_rows: list[dict[str, Any]] = []
 
     for rec in recommendations:
         bundles = [b for b in rec.get("bundles", []) if isinstance(b, dict)]
         coverage[int(len(bundles))] += 1
+        user_profile = _profile_from_recommendation(rec, profile_lookup, order_pool)
+        user_intent_profile = _build_user_intent_profile(user_profile, context)
+        top_intent, top_intent_weight = _top_intent(user_intent_profile)
+        user_top_intent_counts[str(top_intent)] += 1
+        per_user_top_intent.append(
+            {
+                "profile_id": str(rec.get("profile_id", "")),
+                "source_order_ids": [int(x) for x in rec.get("source_order_ids", []) if int(x) > 0],
+                "top_user_intent": str(top_intent),
+                "top_user_intent_weight": float(top_intent_weight),
+            }
+        )
         seen_items: set[int] = set()
         reused = False
         user_tiers: list[str] = []
+        selected_intents: list[str] = []
         for bundle in bundles:
             origin = str(bundle.get("recommendation_origin", ""))
             tier = _tier_from_origin(origin)
@@ -142,6 +227,37 @@ def _build_summary(
                 )
             a = int(bundle.get("product_a", -1))
             b = int(bundle.get("product_b", -1))
+            lane = str(bundle.get("lane", "")).strip().lower()
+            candidate_stub = {
+                "anchor": int(bundle.get("anchor_product_id", a)),
+                "complement": int(bundle.get("complement_product_id", b)),
+                "lane": lane,
+            }
+            bundle_intent = str(_bundle_primary_intent(candidate_stub, context, lane_hint=lane))
+            selected_intents.append(bundle_intent)
+            intent_counts[bundle_intent] += 1
+            if bundle_intent == "cleaning":
+                cleaning_bundles_served.append(
+                    {
+                        "profile_id": str(rec.get("profile_id", "")),
+                        "source_order_ids": [int(x) for x in rec.get("source_order_ids", []) if int(x) > 0],
+                        "pair_names": [name_a, name_b],
+                        "lane": lane,
+                        "origin": origin,
+                    }
+                )
+            misclassification_reason = _intent_misclassification_reason(bundle_intent, name_a, name_b, lane)
+            if misclassification_reason:
+                suspicious_intent_misclassifications.append(
+                    {
+                        "profile_id": str(rec.get("profile_id", "")),
+                        "bundle_intent": bundle_intent,
+                        "reason": misclassification_reason,
+                        "pair_names": [name_a, name_b],
+                        "lane": lane,
+                        "origin": origin,
+                    }
+                )
             if a in seen_items or b in seen_items:
                 reused = True
             if a > 0:
@@ -154,6 +270,8 @@ def _build_summary(
                     "lane": str(bundle.get("lane", "")),
                     "origin": origin,
                     "tier": tier,
+                    "bundle_intent": bundle_intent,
+                    "top_user_intent": str(top_intent),
                     "pair_ids": [a, b],
                     "pair_names": [name_a, name_b],
                     "hybrid_score": _safe_float(bundle.get("hybrid_reco_score", 0.0)),
@@ -163,6 +281,14 @@ def _build_summary(
         if reused:
             item_reuse_violations.append(str(rec.get("profile_id", "")))
         tier_mix[",".join(sorted(user_tiers))] += 1
+        per_user_selected_intents.append(
+            {
+                "profile_id": str(rec.get("profile_id", "")),
+                "source_order_ids": [int(x) for x in rec.get("source_order_ids", []) if int(x) > 0],
+                "top_user_intent": str(top_intent),
+                "selected_bundle_intents": list(selected_intents),
+            }
+        )
 
     latency = {
         "elapsed_total_sec": float(elapsed_sec),
@@ -188,6 +314,16 @@ def _build_summary(
         "tier_usage": {
             "bundle_tier_counts": {str(k): int(v) for k, v in sorted(tier_counts.items())},
             "per_user_tier_mix_counts": {str(k): int(v) for k, v in sorted(tier_mix.items())},
+        },
+        "intent_personalization": {
+            "bundle_intent_counts": {str(k): int(v) for k, v in sorted(intent_counts.items())},
+            "user_top_intent_counts": {str(k): int(v) for k, v in sorted(user_top_intent_counts.items())},
+            "per_user_top_intent": per_user_top_intent,
+            "per_user_selected_intents": per_user_selected_intents,
+            "cleaning_bundles_served_count": int(len(cleaning_bundles_served)),
+            "cleaning_bundles_served": cleaning_bundles_served,
+            "suspicious_intent_misclassifications_count": int(len(suspicious_intent_misclassifications)),
+            "suspicious_intent_misclassifications": suspicious_intent_misclassifications,
         },
         "hard_rule_checks": {
             "item_reuse_violation_count": int(len(item_reuse_violations)),
@@ -232,24 +368,42 @@ def _comparison_payload(
     changed = 0
     missing = 0
     changed_examples: list[dict[str, Any]] = []
+    changed_bundle_count_by_user: list[dict[str, Any]] = []
     for key in all_keys:
         cur = current_by_key.get(key)
         prev = previous_by_key.get(key)
         if cur is None or prev is None:
             missing += 1
             continue
+        prev_bundle_count = int(len([b for b in prev.get("bundles", []) if isinstance(b, dict)]))
+        cur_bundle_count = int(len([b for b in cur.get("bundles", []) if isinstance(b, dict)]))
+        if prev_bundle_count != cur_bundle_count:
+            changed_bundle_count_by_user.append(
+                {
+                    "source_order_ids": list(key),
+                    "before_bundle_count": prev_bundle_count,
+                    "after_bundle_count": cur_bundle_count,
+                }
+            )
         cur_layout = _bundle_layout(cur)
         prev_layout = _bundle_layout(prev)
         if cur_layout != prev_layout:
             changed += 1
             if len(changed_examples) < 10:
                 changed_examples.append(
-                    {"source_order_ids": list(key), "previous": prev_layout, "current": cur_layout}
+                    {
+                        "source_order_ids": list(key),
+                        "before_bundle_count": prev_bundle_count,
+                        "after_bundle_count": cur_bundle_count,
+                        "previous": prev_layout,
+                        "current": cur_layout,
+                    }
                 )
     return {
         "compare_found": True,
         "changed_profiles": int(changed),
         "missing_profiles": int(missing),
+        "changed_bundle_count_by_user": changed_bundle_count_by_user,
         "changed_examples": changed_examples,
     }
 
@@ -285,6 +439,7 @@ def main() -> int:
     view = load_bundle_view(base_dir)
     bundles_df = view.bundles_df
     order_pool = load_order_pool(base_dir)
+    context = load_personalization_context(base_dir)
     profiles = build_default_profiles(order_pool, count=max(1, int(args.sample_size)), rng=random.Random(int(args.seed)))
 
     os.environ["QEU_SERVING_PROFILE"] = "1"
@@ -303,6 +458,9 @@ def main() -> int:
 
     summary = _build_summary(
         recommendations=recommendations,
+        profiles=profiles,
+        context=context,
+        order_pool=order_pool,
         metrics=metrics,
         elapsed_sec=elapsed,
         sample_size=len(profiles),
@@ -342,6 +500,16 @@ def main() -> int:
     )
     tier_counts = summary.get("tier_usage", {}).get("bundle_tier_counts", {})
     print("tier_counts=" + json.dumps(tier_counts, ensure_ascii=False, sort_keys=True))
+    intent_summary = summary.get("intent_personalization", {})
+    print(
+        "intent_counts="
+        + json.dumps(intent_summary.get("bundle_intent_counts", {}), ensure_ascii=False, sort_keys=True)
+    )
+    print(f"cleaning_bundles_served={int(intent_summary.get('cleaning_bundles_served_count', 0))}")
+    print(
+        "suspicious_intent_misclassifications="
+        + str(int(intent_summary.get("suspicious_intent_misclassifications_count", 0)))
+    )
     latency = summary.get("latency", {})
     print(
         "latency="
