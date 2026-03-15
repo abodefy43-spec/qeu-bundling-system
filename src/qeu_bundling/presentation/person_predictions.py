@@ -13,6 +13,7 @@ import os
 import random
 import re
 import secrets
+import time
 from datetime import datetime, timezone
 
 import pandas as pd
@@ -118,6 +119,7 @@ FEEDBACK_REVIEW_REL_PATH = Path("review") / "bundle_feedback.csv"
 FEEDBACK_STRONG_BOOST = 0.75
 FEEDBACK_WEAK_PENALTY = 0.45
 FEEDBACK_TRASH_PENALTY = 1.00
+SERVING_PROFILING_ENV = "QEU_SERVING_PROFILE"
 USE_NEW_BUNDLE_SEMANTICS = str(os.getenv("QEU_USE_NEW_BUNDLE_SEMANTICS", "1")).strip().lower() not in {
     "0",
     "false",
@@ -342,6 +344,9 @@ BRAND_STOPWORDS = frozenset(
         "l",
     }
 )
+_NORMALIZE_TEXT_PATTERN = re.compile(r"[^a-z0-9\u0600-\u06FF]+")
+_LAST_SERVING_PROFILE_METRICS: dict[str, object] = {}
+
 KNOWN_COMPLEMENT_PRIORS = {
     "dates": {"qishta", "cream", "gaimar", "قشطة"},
     "tuna": {"mayonnaise", "mayo"},
@@ -1224,6 +1229,24 @@ class ServingTelemetry:
     by_lane: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
+@dataclass
+class _ServingProfileRecorder:
+    enabled: bool = False
+    per_profile: list[dict[str, object]] = field(default_factory=list)
+    stage_totals: dict[str, float] = field(default_factory=dict)
+
+    def add_stage(self, stage: str, seconds: float) -> None:
+        if not self.enabled:
+            return
+        key = str(stage)
+        self.stage_totals[key] = float(self.stage_totals.get(key, 0.0)) + float(seconds)
+
+    def add_profile(self, payload: dict[str, object]) -> None:
+        if not self.enabled:
+            return
+        self.per_profile.append(dict(payload))
+
+
 @dataclass(frozen=True)
 class OrderPool:
     order_product_ids: dict[int, tuple[int, ...]]
@@ -1375,6 +1398,31 @@ def _record_serving_telemetry(telemetry: ServingTelemetry | None, lane: str, key
     _increment_counter(lane_bucket, key, amount=amount)
 
 
+def _serving_profiling_enabled() -> bool:
+    raw = str(os.getenv(SERVING_PROFILING_ENV, "") or "").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
+
+
+def _percentile(values: list[float], percentile: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(float(v) for v in values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    rank = max(0.0, min(1.0, float(percentile))) * float(len(ordered) - 1)
+    lower = int(math.floor(rank))
+    upper = int(math.ceil(rank))
+    if lower == upper:
+        return float(ordered[lower])
+    weight = float(rank - lower)
+    return float(ordered[lower] * (1.0 - weight) + ordered[upper] * weight)
+
+
+def get_last_serving_profile_metrics() -> dict[str, object]:
+    payload = _LAST_SERVING_PROFILE_METRICS
+    return dict(payload) if isinstance(payload, dict) else {}
+
+
 def _anchor_rank_sort_key(item: tuple[int, float]) -> tuple[float, int]:
     pid, score = item
     return (-float(score), int(pid))
@@ -1384,8 +1432,13 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
+@lru_cache(maxsize=200_000)
+def _normalise_text_cached(value: str) -> str:
+    return _NORMALIZE_TEXT_PATTERN.sub(" ", str(value).lower()).strip()
+
+
 def _normalise_text(value: object) -> str:
-    return re.sub(r"[^a-z0-9\u0600-\u06FF]+", " ", str(value).lower()).strip()
+    return _normalise_text_cached(str(value))
 
 
 def _load_brand_alias_tokens(path: Path) -> dict[str, set[str]]:
@@ -2031,15 +2084,21 @@ def _match_text_token(token: str, matcher: ProductMatcher) -> tuple[int | None, 
     return pid, matcher.product_name_by_id.get(pid, token)
 
 
+@lru_cache(maxsize=200_000)
+def _product_text_from_components(name: str, category: str, family: str) -> str:
+    parts = (
+        _normalise_text(name),
+        _normalise_text(category),
+        _normalise_text(family),
+    )
+    return " ".join(part for part in parts if part)
+
+
 def _product_text_for_pid(pid: int, context: PersonalizationContext) -> str:
-    return " ".join(
-        part
-        for part in (
-            _normalise_text(context.product_name_by_id.get(int(pid), "")),
-            _normalise_text(context.category_by_id.get(int(pid), "")),
-            _normalise_text(context.product_family_by_id.get(int(pid), "")),
-        )
-        if part
+    return _product_text_from_components(
+        str(context.product_name_by_id.get(int(pid), "")),
+        str(context.category_by_id.get(int(pid), "")),
+        str(context.product_family_by_id.get(int(pid), "")),
     )
 
 
@@ -5420,9 +5479,63 @@ def _fallback_candidates_for_lane(
     if not evidence_pairs:
         return []
 
+    evidence_items = list(evidence_pairs.items())
+    pid_text_cache: dict[int, str] = {}
+    for (a, b), (_row, _cp_score, _source) in evidence_items:
+        if int(a) not in pid_text_cache:
+            pid_text_cache[int(a)] = _product_text_for_pid(int(a), context)
+        if int(b) not in pid_text_cache:
+            pid_text_cache[int(b)] = _product_text_for_pid(int(b), context)
+
+    pair_pass_cache: dict[tuple[int, int], bool] = {}
+
+    def _pair_passes_fallback_filters(anchor: int, complement: int, row: pd.Series | None, cp_score: float) -> bool:
+        key = (int(anchor), int(complement))
+        cached = pair_pass_cache.get(key)
+        if cached is not None:
+            return bool(cached)
+        analysis = _pair_analysis(int(anchor), int(complement), lane_name, context, pair_row=row)
+        if lane_name in FOOD_LANE_ORDER and not _anchor_allowed_for_lane(int(anchor), lane_name, context, row=row):
+            pair_pass_cache[key] = False
+            return False
+        if not _passes_pair_filters(
+            int(anchor),
+            int(complement),
+            history_set,
+            context,
+            lane=lane_name,
+            pair_row=row,
+            analysis=analysis,
+        ):
+            pair_pass_cache[key] = False
+            return False
+        recipe_compat = _recipe_compatibility(int(anchor), int(complement), context)
+        prior_bonus = _known_prior_bonus(analysis.anchor_name, analysis.complement_name)
+        pair_count = int(
+            _safe_int(row.get("pair_count", row.get("co_purchase_count", 0)) if row is not None else 0, default=0)
+        )
+        if not _passes_complement_gate(
+            anchor=int(anchor),
+            complement=int(complement),
+            context=context,
+            cp_score=float(cp_score),
+            recipe_compat=float(recipe_compat),
+            prior_bonus=float(prior_bonus),
+            lane=lane_name,
+            pair_count=int(pair_count),
+            pair_row=row,
+            analysis=analysis,
+        ):
+            pair_pass_cache[key] = False
+            return False
+        if lane_name in FOOD_LANE_ORDER and str(analysis.semantic.strength) == semantics.STRENGTH_WEAK:
+            pair_pass_cache[key] = False
+            return False
+        pair_pass_cache[key] = True
+        return True
+
     ranked: list[tuple[tuple[int, int, int, int, float, int, int], int, int, pd.Series | None, str]] = []
     seen_pair_keys: set[tuple[int, int]] = set()
-    evidence_items = list(evidence_pairs.items())
 
     for template in templates:
         template_id = str(template.get("id", "")).strip() or "unknown"
@@ -5443,38 +5556,7 @@ def _fallback_candidates_for_lane(
             if evidence is None:
                 return
             row, cp_score, evidence_source = evidence
-            analysis = _pair_analysis(int(anchor), int(complement), lane_name, context, pair_row=row)
-            if lane_name in FOOD_LANE_ORDER and not _anchor_allowed_for_lane(int(anchor), lane_name, context, row=row):
-                return
-            if not _passes_pair_filters(
-                int(anchor),
-                int(complement),
-                history_set,
-                context,
-                lane=lane_name,
-                pair_row=row,
-                analysis=analysis,
-            ):
-                return
-            recipe_compat = _recipe_compatibility(int(anchor), int(complement), context)
-            prior_bonus = _known_prior_bonus(analysis.anchor_name, analysis.complement_name)
-            pair_count = int(
-                _safe_int(row.get("pair_count", row.get("co_purchase_count", 0)) if row is not None else 0, default=0)
-            )
-            if not _passes_complement_gate(
-                anchor=int(anchor),
-                complement=int(complement),
-                context=context,
-                cp_score=float(cp_score),
-                recipe_compat=float(recipe_compat),
-                prior_bonus=float(prior_bonus),
-                lane=lane_name,
-                pair_count=int(pair_count),
-                pair_row=row,
-                analysis=analysis,
-            ):
-                return
-            if lane_name in FOOD_LANE_ORDER and str(analysis.semantic.strength) == semantics.STRENGTH_WEAK:
+            if not _pair_passes_fallback_filters(int(anchor), int(complement), row, float(cp_score)):
                 return
             source_group = str(template.get("source_group", "fallback")).strip().lower()
             if source_group == "fallback_cleaning":
@@ -5499,8 +5581,8 @@ def _fallback_candidates_for_lane(
         for (a, b), (_row, _cp_score, _evidence_source) in evidence_items:
             if fixed_anchor > 0 and fixed_complement > 0:
                 continue
-            text_a = _product_text_for_pid(int(a), context)
-            text_b = _product_text_for_pid(int(b), context)
+            text_a = pid_text_cache.get(int(a), "")
+            text_b = pid_text_cache.get(int(b), "")
             direct = bool(anchor_tokens) and bool(complement_tokens) and any(tok in text_a for tok in anchor_tokens) and any(
                 tok in text_b for tok in complement_tokens
             )
@@ -6552,9 +6634,12 @@ def build_recommendations_for_profiles(
     run_id: str | None = None,
     rng_salt: str | None = None,
 ) -> list[dict[str, object]]:
+    global _LAST_SERVING_PROFILE_METRICS
     if not profiles or max_people <= 0:
+        _LAST_SERVING_PROFILE_METRICS = {}
         return []
 
+    overall_started = time.perf_counter()
     active_base_dir = base_dir or get_paths().project_root
     bundle_data = bundles_df if bundles_df is not None else pd.DataFrame()
     bundle_lookup = _build_bundle_lookup(bundle_data)
@@ -6580,10 +6665,18 @@ def build_recommendations_for_profiles(
     global_motif_family_exposure: dict[str, int] = {}
     global_family_pattern_exposure: dict[str, int] = {}
     global_bundle_shape_exposure: dict[str, int] = {}
+    profiling = _ServingProfileRecorder(enabled=_serving_profiling_enabled())
+    profiled_nonfood_anchors = [
+        int(pid)
+        for pid in top_bundle_rows_by_anchor.keys()
+        if int(pid) > 0 and _is_nonfood_product(int(pid), context)
+    ]
 
     while idx < len(profile_queue) and len(recommendations) < max_people:
+        profile_started = time.perf_counter()
         profile = profile_queue[idx]
         idx += 1
+        prep_started = time.perf_counter()
         profile_seed_key = _profile_seed_key(profile)
         profile_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=rng_salt)
         nonfood_gate_rng = _rng_for_profile(run_id, profile_seed_key, rng_salt=f"{rng_salt or ''}::nonfood_gate")
@@ -6594,7 +6687,6 @@ def build_recommendations_for_profiles(
         used_complements: set[int] = set()
         used_complement_families: dict[str, int] = {}
         used_anchors_for_person: set[int] = set()
-        used_product_ids_person: set[int] = set()
         selected_themes: set[str] = set()
         selected_pair_fingerprints: set[tuple[str, str]] = set()
         selected_lane_groups: dict[str, set[str]] = {}
@@ -6622,14 +6714,12 @@ def build_recommendations_for_profiles(
                 continue
             if pid_int not in nonfood_anchors:
                 nonfood_anchors.append(pid_int)
-        for pid in top_bundle_rows_by_anchor.keys():
+        for pid in profiled_nonfood_anchors:
             if len(nonfood_anchors) >= TOP10_ANCHOR_SIZE:
                 break
-            pid_int = int(pid)
-            if pid_int <= 0 or pid_int in nonfood_anchors:
+            if int(pid) in nonfood_anchors:
                 continue
-            if _is_nonfood_product(pid_int, context):
-                nonfood_anchors.append(pid_int)
+            nonfood_anchors.append(int(pid))
         if not nonfood_anchors:
             for pid in context.non_food_ids:
                 if len(nonfood_anchors) >= TOP10_ANCHOR_SIZE:
@@ -6640,6 +6730,7 @@ def build_recommendations_for_profiles(
         lane_candidate_ids[LANE_NONFOOD] = nonfood_anchors
 
         candidate_lanes = [LANE_MEAL, LANE_SNACK, LANE_OCCASION]
+        profiling.add_stage("profile_preparation", time.perf_counter() - prep_started)
 
         def _finalize_choice(
             lane_name: str,
@@ -6811,6 +6902,7 @@ def build_recommendations_for_profiles(
         profile_shopper_family_interest = _profile_shopper_family_interest(profile, context)
         candidate_pool: dict[tuple[str, int, int, str], dict[str, object]] = {}
         local_duplicate_blocked = 0
+        candidate_started = time.perf_counter()
 
         def _register_candidate(lane_name: str, choice: dict[str, object], score_value: float) -> None:
             anchor_id = int(_safe_int(choice.get("anchor"), default=-1))
@@ -6929,6 +7021,7 @@ def build_recommendations_for_profiles(
                 choice["source"] = str(fallback_source)
                 _register_candidate(lane, choice, float(personal_score))
 
+        profiling.add_stage("candidate_generation", time.perf_counter() - candidate_started)
         global_duplicate_pair_count_blocked += int(local_duplicate_blocked)
         ordered_candidates = list(candidate_pool.values())
         selected_choices: list[dict[str, object]] = []
@@ -6937,6 +7030,7 @@ def build_recommendations_for_profiles(
         cleaning_count = 0
         selected_fallback_motif_counts: dict[str, int] = {}
 
+        scoring_started = time.perf_counter()
         enriched_candidates: list[dict[str, object]] = []
         for candidate in ordered_candidates:
             enriched = dict(candidate)
@@ -7037,6 +7131,7 @@ def build_recommendations_for_profiles(
                 int(_safe_int(cand.get("anchor"), default=-1)),
             )
         )
+        profiling.add_stage("scoring_ranking", time.perf_counter() - scoring_started)
 
         def _try_select(candidate: dict[str, object], *, allow_cleaning: bool) -> bool:
             nonlocal cleaning_count
@@ -7089,6 +7184,7 @@ def build_recommendations_for_profiles(
                 selected_fallback_motif_counts[fallback_motif] = int(selected_fallback_motif_counts.get(fallback_motif, 0)) + 1
             return True
 
+        selection_started = time.perf_counter()
         # Mild lane-balance nudge: if a strong non-meal option is close in score, take one early.
         if len(selected_choices) < MAX_BUNDLES_PER_PERSON:
             top_meal_score = max(
@@ -7183,6 +7279,8 @@ def build_recommendations_for_profiles(
                 if _try_select(candidate, allow_cleaning=True):
                     break
 
+        profiling.add_stage("selection_fill", time.perf_counter() - selection_started)
+        finalize_started = time.perf_counter()
         for chosen in selected_choices:
             lane = str(chosen.get("lane", LANE_MEAL)).strip().lower()
             bundle_rec, local_duplicate_blocked = _finalize_choice(
@@ -7222,6 +7320,7 @@ def build_recommendations_for_profiles(
             if len(bundles_for_person) >= MAX_BUNDLES_PER_PERSON:
                 break
 
+        profiling.add_stage("output_assembly", time.perf_counter() - finalize_started)
         bundles_for_person = bundles_for_person[:MAX_BUNDLES_PER_PERSON]
 
         if len(bundles_for_person) < MAX_BUNDLES_PER_PERSON and str(profile.source).strip().lower() == "random":
@@ -7246,6 +7345,17 @@ def build_recommendations_for_profiles(
                 _record_serving_telemetry(serving_telemetry, "global", "resample_success")
                 replaced = True
             if replaced:
+                profile_total_sec = time.perf_counter() - profile_started
+                profiling.add_stage("profile_total", profile_total_sec)
+                profiling.add_profile(
+                    {
+                        "profile_id": str(profile.profile_id),
+                        "source": str(profile.source),
+                        "status": "resampled",
+                        "bundle_count": int(len(bundles_for_person)),
+                        "duration_sec": float(profile_total_sec),
+                    }
+                )
                 continue
             _record_serving_telemetry(serving_telemetry, "global", "resample_exhausted")
 
@@ -7265,6 +7375,17 @@ def build_recommendations_for_profiles(
             "bundles": bundles_for_person,
         }
         recommendations.append(person_recommendation)
+        profile_total_sec = time.perf_counter() - profile_started
+        profiling.add_stage("profile_total", profile_total_sec)
+        profiling.add_profile(
+            {
+                "profile_id": str(profile.profile_id),
+                "source": str(profile.source),
+                "status": "served",
+                "bundle_count": int(len(bundles_for_person)),
+                "duration_sec": float(profile_total_sec),
+            }
+        )
 
     _write_person_quality_artifact(
         active_base_dir,
@@ -7276,4 +7397,35 @@ def build_recommendations_for_profiles(
         guardrail_reject_counts=gate_reject_counters,
         serving_telemetry=serving_telemetry,
     )
+    total_runtime_sec = time.perf_counter() - overall_started
+    profile_durations = [float(item.get("duration_sec", 0.0)) for item in profiling.per_profile if float(item.get("duration_sec", 0.0)) > 0]
+    metrics_payload = {
+        "enabled": bool(profiling.enabled),
+        "run_id": str(run_id or ""),
+        "profile_count": int(len(profile_durations)),
+        "total_runtime_sec": float(total_runtime_sec),
+        "avg_latency_sec": float((sum(profile_durations) / len(profile_durations)) if profile_durations else 0.0),
+        "p50_latency_sec": float(_percentile(profile_durations, 0.50)),
+        "p90_latency_sec": float(_percentile(profile_durations, 0.90)),
+        "p95_latency_sec": float(_percentile(profile_durations, 0.95)),
+        "stage_totals_sec": {str(k): float(v) for k, v in sorted(profiling.stage_totals.items())},
+        "per_profile": list(profiling.per_profile),
+    }
+    _LAST_SERVING_PROFILE_METRICS = metrics_payload
+    if profiling.enabled:
+        print(
+            "[qeu-serving-profile] "
+            f"profiles={metrics_payload['profile_count']} "
+            f"total_sec={metrics_payload['total_runtime_sec']:.3f} "
+            f"avg_sec={metrics_payload['avg_latency_sec']:.3f} "
+            f"p50_sec={metrics_payload['p50_latency_sec']:.3f} "
+            f"p90_sec={metrics_payload['p90_latency_sec']:.3f} "
+            f"p95_sec={metrics_payload['p95_latency_sec']:.3f}"
+        )
+        if profiling.stage_totals:
+            stage_parts = ", ".join(
+                f"{stage}={value:.3f}s"
+                for stage, value in sorted(profiling.stage_totals.items(), key=lambda item: (-item[1], item[0]))
+            )
+            print(f"[qeu-serving-profile] stage_totals: {stage_parts}")
     return recommendations
