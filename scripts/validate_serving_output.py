@@ -6,7 +6,9 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import os
 import random
+import time
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -26,7 +28,6 @@ FOOD_LANES = {"meal", "snack", "occasion"}
 NONFOOD_LANE = "nonfood"
 TIER1 = "tier1_personalized"
 TIER2 = "tier2_safe_fallback"
-TIER3 = "tier3_emergency_curated"
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
@@ -48,11 +49,31 @@ def _pair_label(name_a: str, name_b: str) -> str:
     return " + ".join([n for n in names if n])
 
 
+def _percentile(values: list[float], q: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(float(v) for v in values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    pos = max(0.0, min(1.0, float(q))) * float(len(ordered) - 1)
+    lo = int(pos)
+    hi = min(len(ordered) - 1, lo + 1)
+    if lo == hi:
+        return float(ordered[lo])
+    frac = float(pos - lo)
+    return float(ordered[lo] + (ordered[hi] - ordered[lo]) * frac)
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Validate serving outputs via real final path.")
     parser.add_argument("--sample-size", type=int, default=150, help="Number of profiles to evaluate.")
     parser.add_argument("--sample-users", type=int, default=30, help="Number of users to include in readable sample.")
     parser.add_argument("--seed", type=int, default=20260315, help="Deterministic seed for profile generation.")
+    parser.add_argument(
+        "--disable-serving-profile",
+        action="store_true",
+        help="Disable serving latency instrumentation mode.",
+    )
     parser.add_argument("--run-id", default="serving_validation", help="Run id to pass into serving path.")
     parser.add_argument(
         "--output-dir",
@@ -81,6 +102,10 @@ def main() -> int:
     if not profiles:
         raise RuntimeError("Could not build profiles from order pool.")
 
+    if not bool(args.disable_serving_profile):
+        os.environ["QEU_SERVING_PROFILE"] = "1"
+
+    serve_started = time.perf_counter()
     recommendations = build_recommendations_for_profiles(
         bundles_df=bundle_view.bundles_df,
         profiles=profiles,
@@ -89,8 +114,31 @@ def main() -> int:
         base_dir=base_dir,
         run_id=str(args.run_id),
     )
+    serve_elapsed_ms = float((time.perf_counter() - serve_started) * 1000.0)
     context = load_personalization_context(base_dir)
     non_food_ids = {int(pid) for pid in context.non_food_ids}
+
+    profile_latency_rows: list[dict[str, Any]] = []
+    stage_totals = Counter()
+    for rec in recommendations:
+        if not isinstance(rec, dict):
+            continue
+        timing = rec.get("serving_profile_timing_ms", {})
+        if not isinstance(timing, dict):
+            continue
+        profile_id = str(rec.get("profile_id", ""))
+        profile_total = _safe_float(timing.get("profile_total_ms"), default=0.0)
+        if profile_total <= 0.0:
+            continue
+        profile_latency_rows.append(
+            {
+                "profile_id": profile_id,
+                "profile_total_ms": profile_total,
+                "timing": {str(k): _safe_float(v) for k, v in timing.items()},
+            }
+        )
+        for stage_key, stage_value in timing.items():
+            stage_totals[str(stage_key)] += float(_safe_float(stage_value))
 
     coverage = Counter()
     mode_counts = Counter()
@@ -102,13 +150,16 @@ def main() -> int:
     compatibility_violations: list[dict[str, Any]] = []
     pricing_violations: list[dict[str, Any]] = []
     suspicious_bundles: list[dict[str, Any]] = []
-    tier3_pair_counts = Counter()
-    tier3_pair_users: dict[tuple[int, int], set[str]] = defaultdict(set)
+    personalized_pair_counts = Counter()
+    personalized_pair_users: dict[tuple[int, int], set[str]] = defaultdict(set)
+    fallback_pair_counts = Counter()
+    fallback_pair_users: dict[tuple[int, int], set[str]] = defaultdict(set)
     details_rows: list[dict[str, Any]] = []
 
-    users_all_3_tier1 = 0
+    users_all_3_personalized = 0
     users_mixed_tiers = 0
-    users_requiring_tier3 = 0
+    users_with_fallback_fill = 0
+    users_all_3_fallback = 0
 
     recommendation_by_profile = {
         str(rec.get("profile_id", "")): rec
@@ -146,9 +197,12 @@ def main() -> int:
                 pair_counts[pair_key] += 1
                 pair_users[pair_key].add(profile_id)
                 pair_names.setdefault(pair_key, _pair_label(name_a, name_b))
-                if tier == TIER3:
-                    tier3_pair_counts[pair_key] += 1
-                    tier3_pair_users[pair_key].add(profile_id)
+                if tier == TIER1:
+                    personalized_pair_counts[pair_key] += 1
+                    personalized_pair_users[pair_key].add(profile_id)
+                elif tier == TIER2:
+                    fallback_pair_counts[pair_key] += 1
+                    fallback_pair_users[pair_key].add(profile_id)
 
             compatibility_reason = _consumption_pair_reject_reason(name_a, name_b)
             if compatibility_reason:
@@ -234,16 +288,36 @@ def main() -> int:
 
         unique_tiers = sorted({tier for tier in tiers if tier})
         if len(bundles) == 3 and unique_tiers == [TIER1]:
-            users_all_3_tier1 += 1
+            users_all_3_personalized += 1
         if len(unique_tiers) > 1:
             users_mixed_tiers += 1
-        if TIER3 in unique_tiers:
-            users_requiring_tier3 += 1
+        if TIER2 in unique_tiers:
+            users_with_fallback_fill += 1
+        if len(bundles) == 3 and unique_tiers == [TIER2]:
+            users_all_3_fallback += 1
 
     total_profiles = len(profiles)
     total_bundles = sum(coverage[count] * count for count in coverage)
-    tier3_bundles = int(tier_bundle_counts.get(TIER3, 0))
+    personalized_bundles = int(tier_bundle_counts.get(TIER1, 0))
+    fallback_bundles = int(tier_bundle_counts.get(TIER2, 0))
     repeated_pair_types = int(sum(1 for count in pair_counts.values() if count > 1))
+    profile_latency_values = sorted(float(row.get("profile_total_ms", 0.0)) for row in profile_latency_rows if float(row.get("profile_total_ms", 0.0)) > 0.0)
+    stage_avg_ms = {
+        str(stage): round(float(total / max(1, len(profile_latency_rows))), 3)
+        for stage, total in sorted(stage_totals.items())
+    }
+    slowest_profiles = sorted(
+        profile_latency_rows,
+        key=lambda row: -float(row.get("profile_total_ms", 0.0)),
+    )[:10]
+
+    quality_artifact_path = base_dir / "output" / "person_reco_quality.json"
+    quality_artifact = {}
+    if quality_artifact_path.exists():
+        try:
+            quality_artifact = json.loads(quality_artifact_path.read_text(encoding="utf-8"))
+        except Exception:
+            quality_artifact = {}
 
     top_pairs = []
     for pair_key, count in sorted(pair_counts.items(), key=lambda item: (-item[1], item[0]))[:20]:
@@ -256,14 +330,25 @@ def main() -> int:
             }
         )
 
-    top_tier3_pairs = []
-    for pair_key, count in sorted(tier3_pair_counts.items(), key=lambda item: (-item[1], item[0]))[:20]:
-        top_tier3_pairs.append(
+    top_personalized_pairs = []
+    for pair_key, count in sorted(personalized_pair_counts.items(), key=lambda item: (-item[1], item[0]))[:20]:
+        top_personalized_pairs.append(
             {
                 "pair_key": f"{pair_key[0]}-{pair_key[1]}",
                 "pair_label": pair_names.get(pair_key, ""),
                 "bundle_occurrences": int(count),
-                "user_occurrences": int(len(tier3_pair_users.get(pair_key, set()))),
+                "user_occurrences": int(len(personalized_pair_users.get(pair_key, set()))),
+            }
+        )
+
+    top_fallback_pairs = []
+    for pair_key, count in sorted(fallback_pair_counts.items(), key=lambda item: (-item[1], item[0]))[:20]:
+        top_fallback_pairs.append(
+            {
+                "pair_key": f"{pair_key[0]}-{pair_key[1]}",
+                "pair_label": pair_names.get(pair_key, ""),
+                "bundle_occurrences": int(count),
+                "user_occurrences": int(len(fallback_pair_users.get(pair_key, set()))),
             }
         )
 
@@ -301,6 +386,26 @@ def main() -> int:
         "run_id": str(args.run_id),
         "sample_size_requested": int(args.sample_size),
         "sample_size_actual": int(total_profiles),
+        "serving_runtime_ms": round(float(serve_elapsed_ms), 3),
+        "latency": {
+            "instrumentation_enabled": bool(not args.disable_serving_profile),
+            "profile_timing_rows": int(len(profile_latency_rows)),
+            "avg_profile_ms": round(float(sum(profile_latency_values) / max(1, len(profile_latency_values))), 3)
+            if profile_latency_values
+            else 0.0,
+            "p50_profile_ms": round(float(_percentile(profile_latency_values, 0.50)), 3) if profile_latency_values else 0.0,
+            "p90_profile_ms": round(float(_percentile(profile_latency_values, 0.90)), 3) if profile_latency_values else 0.0,
+            "p95_profile_ms": round(float(_percentile(profile_latency_values, 0.95)), 3) if profile_latency_values else 0.0,
+            "max_profile_ms": round(float(max(profile_latency_values)), 3) if profile_latency_values else 0.0,
+            "stage_avg_ms": stage_avg_ms,
+            "slowest_profiles": [
+                {
+                    "profile_id": str(row.get("profile_id", "")),
+                    "profile_total_ms": round(float(row.get("profile_total_ms", 0.0)), 3),
+                }
+                for row in slowest_profiles
+            ],
+        },
         "coverage": {
             "users_with_3_bundles": int(coverage.get(3, 0)),
             "users_with_2_bundles": int(coverage.get(2, 0)),
@@ -310,10 +415,14 @@ def main() -> int:
         "recommendation_mode_counts": {str(k): int(v) for k, v in sorted(mode_counts.items())},
         "tier_usage": {
             "bundle_counts": {str(k): int(v) for k, v in sorted(tier_bundle_counts.items())},
-            "users_all_3_tier1_personalized": int(users_all_3_tier1),
+            "personalized_slot_count": int(personalized_bundles),
+            "fallback_slot_count": int(fallback_bundles),
+            "users_all_3_personalized": int(users_all_3_personalized),
             "users_with_mixed_tiers": int(users_mixed_tiers),
-            "users_requiring_tier3": int(users_requiring_tier3),
-            "tier3_bundle_share": round(float(tier3_bundles / max(1, total_bundles)), 4),
+            "users_with_fallback_fill": int(users_with_fallback_fill),
+            "users_all_3_fallback": int(users_all_3_fallback),
+            "fallback_user_share": round(float(users_with_fallback_fill / max(1, total_profiles)), 4),
+            "fallback_slot_share": round(float(fallback_bundles / max(1, total_bundles)), 4),
         },
         "hard_rule_compliance": {
             "item_reuse_violation_count": int(len(item_reuse_violations)),
@@ -325,15 +434,44 @@ def main() -> int:
             "unique_pair_types": int(len(pair_counts)),
             "repeated_pair_types": int(repeated_pair_types),
             "top_repeated_pairs": top_pairs,
+            "top_repeated_personalized_pairs": top_personalized_pairs,
+            "top_repeated_fallback_pairs": top_fallback_pairs,
         },
-        "tier3_quality": {
-            "tier3_bundle_count": int(tier3_bundles),
-            "tier3_user_count": int(users_requiring_tier3),
-            "tier3_suspicious_bundle_count": int(
-                sum(1 for row in suspicious_bundles if str(row.get("tier", "")) == TIER3)
+        "fallback_quality": {
+            "fallback_bundle_count": int(fallback_bundles),
+            "fallback_user_count": int(users_with_fallback_fill),
+            "fallback_suspicious_bundle_count": int(
+                sum(1 for row in suspicious_bundles if str(row.get("tier", "")) == TIER2)
             ),
-            "top_tier3_pairs": top_tier3_pairs,
+            "top_fallback_pairs": top_fallback_pairs,
         },
+        "serving_profile_counters": {
+            "tier_fill_invoked_total": int(
+                sum(
+                    int((counts or {}).get("tier_fill_invoked", 0))
+                    for counts in (quality_artifact.get("serving_telemetry_by_lane", {}) or {}).values()
+                )
+            ),
+            "tier_fill_selected_total": int(
+                sum(
+                    int((counts or {}).get("tier_fill_selected", 0))
+                    for counts in (quality_artifact.get("serving_telemetry_by_lane", {}) or {}).values()
+                )
+            ),
+            "fallback_lookup_cache_hits": int(
+                sum(
+                    int((counts or {}).get("fallback_lookup_cache_hit", 0))
+                    for counts in (quality_artifact.get("serving_telemetry_by_lane", {}) or {}).values()
+                )
+            ),
+            "fallback_lookup_cache_misses": int(
+                sum(
+                    int((counts or {}).get("fallback_lookup_cache_miss", 0))
+                    for counts in (quality_artifact.get("serving_telemetry_by_lane", {}) or {}).values()
+                )
+            ),
+        },
+        "serving_timing_totals_ms": quality_artifact.get("serving_timing_totals_ms", {}),
         "suspicious_bundle_count": int(len(suspicious_bundles)),
     }
 
@@ -342,9 +480,22 @@ def main() -> int:
     top_pairs_path = output_dir / "top_repeated_pairs.csv"
     sample_path = output_dir / "sample_users.json"
     violations_path = output_dir / "violations.json"
+    latency_path = output_dir / "latency_profile.json"
 
     summary_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     sample_path.write_text(json.dumps(sample_users, ensure_ascii=False, indent=2), encoding="utf-8")
+    latency_path.write_text(
+        json.dumps(
+            {
+                "serve_elapsed_ms": round(float(serve_elapsed_ms), 3),
+                "profiles_with_timing": profile_latency_rows,
+                "stage_totals_ms": {str(k): float(v) for k, v in sorted(stage_totals.items())},
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     violations_path.write_text(
         json.dumps(
             {
@@ -395,6 +546,7 @@ def main() -> int:
     print(f"Details: {details_path}")
     print(f"Top repeated pairs: {top_pairs_path}")
     print(f"Sample users: {sample_path}")
+    print(f"Latency profile: {latency_path}")
     print(f"Violations: {violations_path}")
     return 0
 

@@ -1,5 +1,6 @@
 import json
 from collections import Counter
+import os
 import random
 import tempfile
 import unittest
@@ -2457,10 +2458,11 @@ class PersonPredictionsTests(unittest.TestCase):
             )
         self.assertEqual(len(recs), 1)
         snack = [b for b in recs[0]["bundles"] if str(b.get("lane")) == LANE_SNACK]
-        self.assertEqual(len(snack), 1)
-        names = f"{snack[0].get('product_a_name', '').lower()}::{snack[0].get('product_b_name', '').lower()}"
-        self.assertNotIn("cup", names)
-        self.assertNotIn("cups", names)
+        self.assertGreaterEqual(len(snack), 1)
+        for row in snack:
+            names = f"{row.get('product_a_name', '').lower()}::{row.get('product_b_name', '').lower()}"
+            self.assertNotIn("cup", names)
+            self.assertNotIn("cups", names)
 
     def test_occasion_blocks_fat_plus_cheese_spread(self):
         context = _build_context()
@@ -2711,7 +2713,9 @@ class PersonPredictionsTests(unittest.TestCase):
                 )
         self.assertEqual(len(recs), 1)
         self.assertGreater(call_counters["normal"], 0)
-        self.assertGreater(call_counters["fallback"], 0)
+        self.assertEqual(call_counters["fallback"], 0)
+        self.assertEqual(len(recs[0].get("bundles", [])), 3)
+        self.assertTrue(all(str(bundle.get("serving_tier", "")) == "tier2_safe_fallback" for bundle in recs[0]["bundles"]))
         lanes = {str(bundle.get("lane")) for bundle in recs[0]["bundles"]}
         self.assertTrue(bool(lanes & {LANE_MEAL, LANE_SNACK, LANE_OCCASION}))
 
@@ -3746,13 +3750,13 @@ class PersonPredictionsTests(unittest.TestCase):
             )
         self.assertEqual(len(recs), 1)
         bundles_out = recs[0].get("bundles", [])
-        self.assertEqual(len(bundles_out), 3)
+        self.assertEqual(len(bundles_out), 2)
         lanes = {str(bundle.get("lane", "")).strip().lower() for bundle in bundles_out}
         self.assertIn(LANE_MEAL, lanes)
         self.assertTrue(lanes.issubset({LANE_MEAL, LANE_NONFOOD}))
         self.assertEqual(set(recs[0].get("missing_food_lanes", [])), {LANE_SNACK, LANE_OCCASION})
 
-    def test_random_profile_resamples_instead_of_weak_fill(self):
+    def test_random_profile_is_not_resampled_and_uses_fallback_fill(self):
         bundles = _build_bundles()
         context = _build_context()
         weak_random = PersonProfile(
@@ -3783,7 +3787,7 @@ class PersonPredictionsTests(unittest.TestCase):
             history_counts={1: 2, 2: 2, 3: 2, 4: 1, 5: 2, 8: 2, 9: 1, 10: 1},
         )
         with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
-            with patch("qeu_bundling.presentation.person_predictions.build_random_profile", side_effect=[resampled_random, None]):
+            with patch("qeu_bundling.presentation.person_predictions.build_random_profile", side_effect=[resampled_random, None]) as mocked_resample:
                 recs = build_recommendations_for_profiles(
                     bundles_df=bundles,
                     profiles=[weak_random],
@@ -3792,7 +3796,8 @@ class PersonPredictionsTests(unittest.TestCase):
                     run_id="run_random_resample",
                 )
         self.assertEqual(len(recs), 1)
-        self.assertEqual(str(recs[0].get("profile_id")), "p_random_resampled")
+        self.assertEqual(mocked_resample.call_count, 0)
+        self.assertEqual(str(recs[0].get("profile_id")), "p_random_weak")
         self.assertEqual(len(recs[0].get("bundles", [])), 3)
 
     def _run_quality_tightening_case(self) -> list[dict[str, object]]:
@@ -6035,6 +6040,56 @@ class PersonPredictionsTests(unittest.TestCase):
         ]
         result = _apply_cleaning_display_fallback(recommendations)
         self.assertEqual(len(result[0]["bundles"]), 2)
+
+    def test_serving_profile_timing_enabled_via_env(self):
+        bundles = _build_bundles()
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_timing_enabled",
+            source="manual",
+            order_ids=[9910],
+            history_product_ids=[1, 2, 5, 8],
+            history_items=["watania chicken breast", "basmati rice", "black tea", "chocolate biscuit"],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 2, 2: 2, 5: 1, 8: 1},
+        )
+        with patch.dict(os.environ, {"QEU_SERVING_PROFILE": "1"}, clear=False):
+            with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+                recs = build_recommendations_for_profiles(
+                    bundles_df=bundles,
+                    profiles=[profile],
+                    max_people=1,
+                    row_to_record=lambda row: row.to_dict(),
+                    run_id="run_profile_timing_enabled",
+                )
+        self.assertEqual(len(recs), 1)
+        timing = recs[0].get("serving_profile_timing_ms")
+        self.assertIsInstance(timing, dict)
+        self.assertGreater(float(timing.get("profile_total_ms", 0.0)), 0.0)
+
+    def test_serving_profile_timing_disabled_by_default(self):
+        bundles = _build_bundles()
+        context = _build_context()
+        profile = PersonProfile(
+            profile_id="p_timing_disabled",
+            source="manual",
+            order_ids=[9911],
+            history_product_ids=[1, 2, 5, 8],
+            history_items=["watania chicken breast", "basmati rice", "black tea", "chocolate biscuit"],
+            created_at="2026-03-12T00:00:00+00:00",
+            history_counts={1: 2, 2: 2, 5: 1, 8: 1},
+        )
+        with patch.dict(os.environ, {"QEU_SERVING_PROFILE": ""}, clear=False):
+            with patch("qeu_bundling.presentation.person_predictions.load_personalization_context", return_value=context):
+                recs = build_recommendations_for_profiles(
+                    bundles_df=bundles,
+                    profiles=[profile],
+                    max_people=1,
+                    row_to_record=lambda row: row.to_dict(),
+                    run_id="run_profile_timing_disabled",
+                )
+        self.assertEqual(len(recs), 1)
+        self.assertNotIn("serving_profile_timing_ms", recs[0])
 
 
 if __name__ == "__main__":
