@@ -55,8 +55,6 @@ class Phase08PredictTests(unittest.TestCase):
                     "product_b": 202,
                     "product_a_price": 20.0,
                     "product_b_price": 10.0,
-                    "discount_pred_a": 30.0,
-                    "discount_pred_b": 15.0,
                 }
             ]
         )
@@ -68,6 +66,8 @@ class Phase08PredictTests(unittest.TestCase):
         out = _apply_margin_safe_pricing(bundles, odoo_lookup)
         row = out.iloc[0]
 
+        self.assertNotIn("discount_pred_a", out.columns)
+        self.assertNotIn("discount_pred_b", out.columns)
         self.assertEqual(float(row["product_a_price"]), 20.0)
         self.assertEqual(float(row["product_b_price"]), 30.0)
         self.assertEqual(float(row["purchase_price_a"]), 19.0)
@@ -75,8 +75,9 @@ class Phase08PredictTests(unittest.TestCase):
         self.assertEqual(str(row["free_product"]), "product_a")
         self.assertEqual(str(row["paid_product"]), "product_b")
         self.assertEqual(float(row["price_after_discount_a"]), 0.0)
-        # Margin discount for paid item (B): margin=20, disc=15% => final=10 + 17 = 27
-        self.assertEqual(float(row["price_after_discount_b"]), 27.0)
+        # Fixed 80% margin discount for paid item (B): margin=20 => final=10 + 0.2*20 = 14
+        self.assertEqual(float(row["price_after_discount_b"]), 14.0)
+        self.assertEqual(float(row["margin_discount_pct"]), 80.0)
         self.assertGreaterEqual(float(row["price_after_discount_b"]), float(row["purchase_price_b"]))
 
     def test_apply_margin_safe_pricing_handles_missing_purchase_cost_safely(self):
@@ -87,8 +88,6 @@ class Phase08PredictTests(unittest.TestCase):
                     "product_b": 404,
                     "product_a_price": 15.0,
                     "product_b_price": 5.0,
-                    "discount_pred_a": 25.0,
-                    "discount_pred_b": 25.0,
                 }
             ]
         )
@@ -101,6 +100,8 @@ class Phase08PredictTests(unittest.TestCase):
         out = _apply_margin_safe_pricing(bundles, odoo_lookup)
         row = out.iloc[0]
 
+        self.assertNotIn("discount_pred_a", out.columns)
+        self.assertNotIn("discount_pred_b", out.columns)
         self.assertEqual(str(row["paid_product"]), "product_a")
         self.assertEqual(str(row["free_product"]), "product_b")
         self.assertEqual(int(row["purchase_price_missing_a"]), 1)

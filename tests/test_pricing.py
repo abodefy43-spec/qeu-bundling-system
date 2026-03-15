@@ -5,10 +5,12 @@ from pathlib import Path
 import pandas as pd
 
 from qeu_bundling.core.pricing import (
+    FIXED_MARGIN_DISCOUNT_PCT,
     ProductPriceRecord,
     load_odoo_price_lookup,
     margin_discounted_sale_price,
     price_paid_and_free_items,
+    price_paid_and_free_items_fixed_margin,
     resolve_sale_and_purchase,
 )
 
@@ -37,6 +39,18 @@ class PricingRulesTests(unittest.TestCase):
         self.assertEqual(str(priced["free_product"]), "product_a")
         self.assertEqual(float(priced["price_after_discount_a"]), 0.0)
         self.assertGreaterEqual(float(priced["price_after_discount_b"]), 10.0)
+
+    def test_fixed_margin_bundle_pricing_uses_80pct_margin_discount(self):
+        priced = price_paid_and_free_items_fixed_margin(
+            sale_price_a=20.0,
+            purchase_price_a=15.0,
+            sale_price_b=30.0,
+            purchase_price_b=10.0,
+        )
+        self.assertEqual(FIXED_MARGIN_DISCOUNT_PCT, 80.0)
+        self.assertEqual(str(priced["paid_side"]), "b")
+        self.assertEqual(float(priced["price_after_discount_b"]), 14.0)
+        self.assertEqual(float(priced["price_after_discount_a"]), 0.0)
 
     def test_resolve_sale_and_purchase_missing_purchase_uses_safe_fallback(self):
         sale, purchase, missing = resolve_sale_and_purchase(

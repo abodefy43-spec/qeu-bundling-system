@@ -35,6 +35,9 @@ ODOO_PURCHASE_COLUMNS = (
     "purchase_cost",
 )
 
+# Product truth: bundle paid-item pricing always uses a fixed 80% discount on margin.
+FIXED_MARGIN_DISCOUNT_PCT = 80.0
+
 
 @dataclass(frozen=True)
 class ProductPriceRecord:
@@ -231,3 +234,20 @@ def price_paid_and_free_items(
         "unit_profit_a": round(max(0.0, float(final_a) - purchase_a), 4),
         "unit_profit_b": round(max(0.0, float(final_b) - purchase_b), 4),
     }
+
+
+def price_paid_and_free_items_fixed_margin(
+    sale_price_a: float,
+    purchase_price_a: float,
+    sale_price_b: float,
+    purchase_price_b: float,
+) -> dict[str, object]:
+    """Apply fixed 80%-of-margin discount pricing and return paid/free assignment."""
+    return price_paid_and_free_items(
+        sale_price_a=sale_price_a,
+        purchase_price_a=purchase_price_a,
+        discount_pct_a=FIXED_MARGIN_DISCOUNT_PCT,
+        sale_price_b=sale_price_b,
+        purchase_price_b=purchase_price_b,
+        discount_pct_b=FIXED_MARGIN_DISCOUNT_PCT,
+    )

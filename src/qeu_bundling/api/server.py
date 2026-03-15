@@ -13,7 +13,7 @@ import pandas as pd
 from flask import Flask, jsonify, request
 
 from qeu_bundling.config.paths import get_paths
-from qeu_bundling.core.pricing import margin_discounted_sale_price
+from qeu_bundling.core.pricing import FIXED_MARGIN_DISCOUNT_PCT, margin_discounted_sale_price
 from qeu_bundling.core.run_manifest import read_latest_manifest
 from qeu_bundling.presentation.bundle_view import load_bundle_view, row_to_record
 from qeu_bundling.presentation.person_predictions import (
@@ -27,9 +27,6 @@ MAX_BUNDLES = 3
 MIN_HISTORY_PRODUCTS = 2
 MAX_ORDER_IDS_PER_PROFILE = 6
 USER_ID_COLUMNS = ("user_id", "customer_id", "customer_no", "partner_id")
-FIXED_MARGIN_DISCOUNT_PCT = 80.0
-
-
 class CustomerNotFoundError(RuntimeError):
     """Raised when no order history can be resolved for a requested user."""
 
