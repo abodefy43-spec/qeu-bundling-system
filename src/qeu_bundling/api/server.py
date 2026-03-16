@@ -27,6 +27,12 @@ MAX_BUNDLES = 3
 MIN_HISTORY_PRODUCTS = 2
 MAX_ORDER_IDS_PER_PROFILE = 6
 USER_ID_COLUMNS = ("user_id", "customer_id", "customer_no", "partner_id")
+
+DEFAULT_S3_FILTERED_ORDERS_KEY = "processed/filtered_orders.pkl"
+DEFAULT_S3_SCORED_CANDIDATES_KEY = "output/person_candidates_scored.csv"
+DEFAULT_S3_CANDIDATE_PAIRS_KEY = "processed/candidates/person_candidate_pairs.csv"
+
+
 class CustomerNotFoundError(RuntimeError):
     """Raised when no order history can be resolved for a requested user."""
 
@@ -43,6 +49,63 @@ def _project_root() -> Path:
     if raw:
         return Path(raw).resolve()
     return get_paths().project_root
+
+
+def _env_str(name: str, default: str = "") -> str:
+    return str(os.environ.get(name, default) or default).strip()
+
+
+def _download_file_from_s3(bucket: str, key: str, target: Path) -> bool:
+    try:
+        import boto3  # type: ignore
+    except Exception as exc:  # pragma: no cover
+        print(f"[api] boto3 unavailable; cannot download s3://{bucket}/{key}: {exc}")
+        return False
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    partial = target.with_suffix(target.suffix + ".part")
+    try:
+        boto3.client("s3").download_file(bucket, key, str(partial))
+        partial.replace(target)
+        print(f"[api] downloaded s3://{bucket}/{key} -> {target}")
+        return True
+    except Exception as exc:  # pragma: no cover
+        print(f"[api] failed to download s3://{bucket}/{key}: {exc}")
+        try:
+            if partial.exists():
+                partial.unlink()
+        except OSError:
+            pass
+        return False
+
+
+@lru_cache(maxsize=1)
+def _bootstrap_runtime_artifacts_from_s3_once(base_dir_str: str) -> None:
+    base_dir = Path(base_dir_str).resolve()
+    paths = get_paths(project_root=base_dir)
+    bucket = _env_str("QEU_ARTIFACTS_S3_BUCKET")
+    if not bucket:
+        return
+
+    targets: list[tuple[Path, str]] = [
+        (
+            paths.data_processed_dir / "filtered_orders.pkl",
+            _env_str("QEU_S3_FILTERED_ORDERS_KEY", DEFAULT_S3_FILTERED_ORDERS_KEY),
+        ),
+        (
+            paths.output_dir / "person_candidates_scored.csv",
+            _env_str("QEU_S3_SCORED_CANDIDATES_KEY", DEFAULT_S3_SCORED_CANDIDATES_KEY),
+        ),
+        (
+            paths.data_processed_candidates_dir / "person_candidate_pairs.csv",
+            _env_str("QEU_S3_CANDIDATE_PAIRS_KEY", DEFAULT_S3_CANDIDATE_PAIRS_KEY),
+        ),
+    ]
+
+    for target, key in targets:
+        if target.exists() or not key:
+            continue
+        _download_file_from_s3(bucket=bucket, key=key, target=target)
 
 
 def _safe_float(value: object, default: float = 0.0) -> float:
@@ -170,6 +233,7 @@ def _latest_run_id(base_dir: Path) -> str:
 
 def _recommendation_records_for_user(user_id: int) -> list[dict[str, object]]:
     base_dir = _project_root()
+    _bootstrap_runtime_artifacts_from_s3_once(str(base_dir))
     order_pool = load_order_pool(base_dir)
     orders_df = _load_orders_frame(base_dir)
     order_ids = _resolve_order_ids_for_user(user_id, orders_df)

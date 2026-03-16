@@ -1,20 +1,77 @@
-# Python
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
-*.so
+*$py.class
+
+# Virtual environments
 .venv/
 venv/
 env/
 
-# IDE / OS
-.idea/
+# Packaging/build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Test/type/lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Local env/config
+.env
+.env.*
+*.local
+.python-version
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+terraform.tfvars
+terraform.tfvars.json
+*.auto.tfvars
+*.auto.tfvars.json
+
+# Editor / IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS junk
 .DS_Store
 Thumbs.db
 
-# Secrets / credentials
-.env
-.env.*
+# Logs and pids
+*.log
+*.pid
+
+# Generated outputs and local data artifacts
+output/
+data/processed/
+data/raw/*.csv
+data/raw/*.pkl
+data/raw/*.npy
+data/raw/*.npz
+data/processed/*.csv
+data/processed/*.pkl
+data/processed/*.npy
+data/processed/*.npz
+
+# Secrets and certificates
 *.pem
 *.key
 *.p12
@@ -25,21 +82,9 @@ Thumbs.db
 *credentials*.json
 *service-account*.json
 
-# Logs
-*.log
-
-# Data + output artifacts
-data/raw/*.csv
-data/raw/*.pkl
-data/raw/*.npy
-data/raw/*.npz
-data/processed/*.csv
-data/processed/*.pkl
-data/processed/*.npy
-data/processed/*.npz
-output/
-
-# Temporary archives / duplicates
-*.zip
+# Large local files / backups
+order_items.zip
+odoo_products.xlsx
+rollback_safety_v2/
 qeu-bundling-system/
 qeu-bundling-system1/

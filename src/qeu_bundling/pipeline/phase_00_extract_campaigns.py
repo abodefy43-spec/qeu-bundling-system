@@ -8,18 +8,88 @@ Reads the full raw file once and writes three artefacts to data/:
 
 from __future__ import annotations
 
+import os
 from itertools import combinations
 from pathlib import Path
+from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
 from qeu_bundling.config.paths import get_paths
 
 CHUNK_SIZE = 100_000
+DEFAULT_RAW_ORDER_ITEMS_S3_KEYS = (
+    "raw/order_items.csv",
+    "data/raw/order_items.csv",
+    "order_items.csv",
+)
 
 
 def _data_dir() -> Path:
     return get_paths().data_processed_dir
+
+
+def _parse_s3_uri(s3_uri: str) -> tuple[str, str] | None:
+    uri = str(s3_uri or "").strip()
+    if not uri:
+        return None
+    parsed = urlparse(uri)
+    if parsed.scheme != "s3" or not parsed.netloc or not parsed.path.strip("/"):
+        return None
+    return parsed.netloc.strip(), parsed.path.lstrip("/")
+
+
+def _s3_raw_candidates() -> list[tuple[str, str]]:
+    uri_candidate = _parse_s3_uri(os.environ.get("QEU_RAW_ORDER_ITEMS_S3_URI", ""))
+    if uri_candidate is not None:
+        return [uri_candidate]
+
+    bucket = str(os.environ.get("QEU_ARTIFACTS_S3_BUCKET", "") or "").strip()
+    if not bucket:
+        return []
+
+    env_key = str(os.environ.get("QEU_RAW_ORDER_ITEMS_S3_KEY", "") or "").strip()
+    keys = [env_key] if env_key else list(DEFAULT_RAW_ORDER_ITEMS_S3_KEYS)
+    return [(bucket, k) for k in keys if k]
+
+
+def _download_raw_csv_from_s3(paths) -> Path | None:
+    candidates = _s3_raw_candidates()
+    if not candidates:
+        return None
+
+    try:
+        import boto3  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError(
+            "S3 raw bootstrap requested but boto3 is unavailable. "
+            "Install batch dependencies (requirements.batch.txt)."
+        ) from exc
+
+    target = paths.data_raw_dir / "order_items.csv"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    temp_target = target.with_suffix(".csv.part")
+    s3_client = boto3.client("s3")
+    errors: list[str] = []
+
+    for bucket, key in candidates:
+        try:
+            s3_client.download_file(bucket, key, str(temp_target))
+            temp_target.replace(target)
+            print(f"  Downloaded raw orders from s3://{bucket}/{key} -> {target}")
+            return target
+        except Exception as exc:  # pragma: no cover - network/service exceptions
+            errors.append(f"s3://{bucket}/{key} ({exc})")
+            if temp_target.exists():
+                try:
+                    temp_target.unlink()
+                except OSError:
+                    pass
+
+    print("  Unable to download raw order_items.csv from S3 candidates:")
+    for err in errors:
+        print(f"    - {err}")
+    return None
 
 
 def _raw_csv() -> Path:
@@ -34,7 +104,16 @@ def _raw_csv() -> Path:
     for p in candidates:
         if p.exists():
             return p
-    raise FileNotFoundError("Cannot locate raw order_items.csv")
+
+    downloaded = _download_raw_csv_from_s3(paths)
+    if downloaded is not None and downloaded.exists():
+        return downloaded
+
+    raise FileNotFoundError(
+        "Cannot locate raw order_items.csv. Checked local data paths and S3 bootstrap. "
+        "Set QEU_RAW_ORDER_ITEMS_S3_URI (s3://bucket/key) or "
+        "QEU_ARTIFACTS_S3_BUCKET (+ optional QEU_RAW_ORDER_ITEMS_S3_KEY)."
+    )
 
 
 def extract_campaigns(data_dir: Path | None = None) -> None:

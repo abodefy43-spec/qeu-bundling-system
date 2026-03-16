@@ -1,0 +1,48 @@
+# Core identity
+project_name = "qeu-bundling"
+environment  = "staging"
+aws_region   = "us-east-1"
+
+# Required networking (replace with real IDs)
+vpc_id            = "vpc-0123456789abcdef0"
+public_subnet_ids = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
+
+# Restrict in production to known CIDRs (office/VPN)
+allowed_ingress_cidrs = ["0.0.0.0/0"]
+
+# Artifact bucket settings
+# Leave empty to auto-generate a unique bucket name
+artifacts_bucket_name    = ""
+s3_force_destroy         = false
+s3_transition_to_ia_days = 30
+
+# Container image settings
+# Option A: provide explicit image URIs
+api_image   = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/qeu-api:staging"
+batch_image = "<account-id>.dkr.ecr.us-east-1.amazonaws.com/qeu-batch:staging"
+
+# Option B: let Terraform create ECR repositories
+create_ecr_repositories = true
+
+# ALB/API target settings
+api_container_port    = 5000
+api_health_check_path = "/healthz"
+
+# Environment maps (consumed by locals in current main.tf)
+common_env = {
+  QEU_PROJECT_ROOT = "/app"
+}
+
+api_env = {
+  QEU_LOCAL_FAST_MODE = "0"
+}
+
+batch_env = {
+  QEU_SERVING_PROFILE = "0"
+}
+
+# Future examples (not consumed by current main.tf)
+# private_subnet_ids       = ["subnet-cccccccc", "subnet-dddddddd"]
+# batch_schedule_expression = "cron(0 2 * * ? *)"
+# create_rds               = false
+# create_redis             = false

@@ -1,0 +1,34 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app/src \
+    QEU_PROJECT_ROOT=/app
+
+WORKDIR /app
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.txt /app/requirements.txt
+COPY requirements.batch.txt /app/requirements.batch.txt
+ARG TORCH_VERSION=2.5.1
+RUN pip install --upgrade pip \
+    && pip install --index-url https://download.pytorch.org/whl/cpu "torch==${TORCH_VERSION}" \
+    && pip install -r /app/requirements.batch.txt
+
+COPY src /app/src
+COPY templates /app/templates
+COPY static /app/static
+COPY scripts /app/scripts
+COPY data/reference /app/data/reference
+
+RUN useradd --create-home --shell /usr/sbin/nologin appuser \
+    && mkdir -p /app/data/raw /app/data/processed /app/output \
+    && chown -R appuser:appuser /app
+
+USER appuser
+
+CMD ["python", "-m", "qeu_bundling.cli", "run", "quick"]
