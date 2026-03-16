@@ -1,0 +1,4 @@
+product_id,product_name,sale_price,purchase_price,brand,category
+200101,Basmati Rice 5kg,34.90,28.00,ExampleBrand,grains
+200205,Chicken Nuggets 750g,18.50,13.20,ExampleBrand,frozen
+200310,Tomato Paste 130g,3.20,2.00,ExampleBrand,pantry

@@ -10,6 +10,11 @@ QEU is a Python recommendation system for retail product bundles. The workload i
 
 The API path is intended for serving precomputed results, not full inline recommendation generation.
 
+## Sensitive Data Policy
+
+- Raw and generated customer-derived datasets are not stored in Git.
+- See `data/SENSITIVE_DATA_PLACEHOLDERS.md` for removed paths and synthetic replacements.
+
 ## Local Development
 
 ### Setup

@@ -66,6 +66,7 @@ data/raw/*.csv
 data/raw/*.pkl
 data/raw/*.npy
 data/raw/*.npz
+!data/raw/*.example.csv
 data/processed/*.csv
 data/processed/*.pkl
 data/processed/*.npy
@@ -84,7 +85,10 @@ data/processed/*.npz
 
 # Large local files / backups
 order_items.zip
+odoo_product.xlsx
 odoo_products.xlsx
+data/raw/*.xlsx
+data/raw/*.xls
 rollback_safety_v2/
 qeu-bundling-system/
 qeu-bundling-system1/

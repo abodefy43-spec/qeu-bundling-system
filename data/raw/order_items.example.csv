@@ -1,0 +1,4 @@
+order_id,product_id,product_name,unit_price,effective_price,base_price,discount_amount,quantity,created_at,campaign_id,campaign_type,product_role,product_picture,store_name,city
+1000001,200101,Basmati Rice 5kg,34.90,29.90,34.90,5.00,1,2026-01-10T11:05:00Z,501,promo,anchor,https://example.com/images/rice-5kg.jpg,Riyadh Downtown,Riyadh
+1000001,200205,Chicken Nuggets 750g,18.50,16.00,18.50,2.50,1,2026-01-10T11:05:00Z,501,promo,complement,https://example.com/images/nuggets-750g.jpg,Riyadh Downtown,Riyadh
+1000002,200310,Tomato Paste 130g,3.20,3.20,3.20,0.00,2,2026-01-11T09:20:00Z,0,none,anchor,https://example.com/images/tomato-paste-130g.jpg,Jeddah North,Jeddah
