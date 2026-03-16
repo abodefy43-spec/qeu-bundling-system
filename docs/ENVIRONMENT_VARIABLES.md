@@ -29,9 +29,7 @@ Reference for runtime configuration in local, staging, and production.
 | `QEU_FLASK_PORT` | Port bind when running Flask directly. | Optional | `5000` | No |
 | `QEU_LOCAL_FAST_MODE` | Local dashboard shortcut mode. Keep disabled in production. | Optional | `0` | No |
 | `QEU_DASHBOARD_DEFAULT_PERSON_COUNT` | Default profile count shown in dashboard. | Optional | `10` | No |
-| `QEU_S3_FILTERED_ORDERS_KEY` | S3 key for `filtered_orders.pkl` bootstrap. | Optional | `processed/filtered_orders.pkl` | No |
-| `QEU_S3_SCORED_CANDIDATES_KEY` | S3 key for `person_candidates_scored.csv` bootstrap. | Optional | `output/person_candidates_scored.csv` | No |
-| `QEU_S3_CANDIDATE_PAIRS_KEY` | S3 key for `person_candidate_pairs.csv` bootstrap. | Optional | `processed/candidates/person_candidate_pairs.csv` | No |
+| `QEU_S3_FINAL_RECOMMENDATIONS_KEY` | S3 key for `final_recommendations_by_user.json` (batch upload + API bootstrap). | Optional | `output/final_recommendations_by_user.json` | No |
 | `QEU_API_LOG_LEVEL` | API server log level. | Optional | `INFO` | No |
 
 ## Gunicorn Runtime (API Container)

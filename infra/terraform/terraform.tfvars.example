@@ -46,7 +46,8 @@ common_env = {
 }
 
 api_env = {
-  QEU_LOCAL_FAST_MODE = "0"
+  QEU_LOCAL_FAST_MODE             = "0"
+  QEU_S3_FINAL_RECOMMENDATIONS_KEY = "output/final_recommendations_by_user.json"
 }
 
 batch_env = {

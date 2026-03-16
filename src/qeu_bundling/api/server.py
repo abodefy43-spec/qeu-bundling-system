@@ -1,4 +1,4 @@
-"""Minimal JSON-only API server for customer bundle recommendations."""
+"""Minimal JSON-only API server for precomputed customer bundle recommendations."""
 
 from __future__ import annotations
 
@@ -9,34 +9,20 @@ import socket
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from functools import lru_cache
 from pathlib import Path
 from threading import Lock
 
-import pandas as pd
 from flask import Flask, jsonify, request
 
 from qeu_bundling.config.paths import get_paths
-from qeu_bundling.core.pricing import FIXED_MARGIN_DISCOUNT_PCT, margin_discounted_sale_price
-from qeu_bundling.core.run_manifest import read_latest_manifest
-from qeu_bundling.presentation.bundle_view import load_bundle_view, row_to_record
-from qeu_bundling.presentation.person_predictions import (
-    OrderPool,
-    PersonProfile,
-    build_recommendations_for_profiles,
-    load_personalization_context,
-    load_order_pool,
+from qeu_bundling.core.final_recommendations import (
+    DEFAULT_FINAL_RECOMMENDATIONS_S3_KEY,
+    FINAL_RECOMMENDATIONS_ARTIFACT,
+    load_final_recommendations_artifact,
 )
 
 MAX_BUNDLES = 3
-MIN_HISTORY_PRODUCTS = 2
-MAX_ORDER_IDS_PER_PROFILE = 6
-USER_ID_COLUMNS = ("user_id", "customer_id", "customer_no", "partner_id")
-
-DEFAULT_S3_FILTERED_ORDERS_KEY = "processed/filtered_orders.pkl"
-DEFAULT_S3_SCORED_CANDIDATES_KEY = "output/person_candidates_scored.csv"
-DEFAULT_S3_CANDIDATE_PAIRS_KEY = "processed/candidates/person_candidate_pairs.csv"
-
+DEFAULT_S3_FINAL_RECOMMENDATIONS_KEY = DEFAULT_FINAL_RECOMMENDATIONS_S3_KEY
 
 LOG_LEVEL = str(os.getenv("QEU_API_LOG_LEVEL", "INFO") or "INFO").upper()
 if not logging.getLogger().handlers:
@@ -49,11 +35,11 @@ LOGGER.setLevel(LOG_LEVEL)
 
 
 class CustomerNotFoundError(RuntimeError):
-    """Raised when no order history can be resolved for a requested user."""
+    """Raised when no precomputed recommendations exist for the user."""
 
 
 class InsufficientHistoryError(RuntimeError):
-    """Raised when a user has too little history to score bundles."""
+    """Raised when a user has no usable precomputed bundles."""
 
 
 class ServiceNotReadyError(RuntimeError):
@@ -68,18 +54,14 @@ class ServingRuntimeState:
     base_dir: Path | None = None
     run_id: str = ""
     artifact_meta: dict[str, dict[str, object]] = field(default_factory=dict)
-    order_pool: OrderPool | None = None
-    orders_df: pd.DataFrame = field(default_factory=pd.DataFrame)
-    bundles_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    recommendations_by_user: dict[int, list[dict[str, object]]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
 class ServingAssets:
     base_dir: Path
     run_id: str
-    order_pool: OrderPool
-    orders_df: pd.DataFrame
-    bundles_df: pd.DataFrame
+    recommendations_by_user: dict[int, list[dict[str, object]]]
 
 
 app = Flask(__name__)
@@ -102,19 +84,9 @@ def _artifact_specs(base_dir: Path) -> list[tuple[str, Path, str]]:
     paths = get_paths(project_root=base_dir)
     return [
         (
-            "filtered_orders",
-            paths.data_processed_dir / "filtered_orders.pkl",
-            _env_str("QEU_S3_FILTERED_ORDERS_KEY", DEFAULT_S3_FILTERED_ORDERS_KEY),
-        ),
-        (
-            "person_candidates_scored",
-            paths.output_dir / "person_candidates_scored.csv",
-            _env_str("QEU_S3_SCORED_CANDIDATES_KEY", DEFAULT_S3_SCORED_CANDIDATES_KEY),
-        ),
-        (
-            "person_candidate_pairs",
-            paths.data_processed_candidates_dir / "person_candidate_pairs.csv",
-            _env_str("QEU_S3_CANDIDATE_PAIRS_KEY", DEFAULT_S3_CANDIDATE_PAIRS_KEY),
+            "final_recommendations_by_user",
+            paths.output_dir / FINAL_RECOMMENDATIONS_ARTIFACT,
+            _env_str("QEU_S3_FINAL_RECOMMENDATIONS_KEY", DEFAULT_S3_FINAL_RECOMMENDATIONS_KEY),
         ),
     ]
 
@@ -211,166 +183,24 @@ def _assert_required_artifacts_present(artifact_meta: dict[str, dict[str, object
         raise FileNotFoundError(f"Missing required serving artifacts: {joined}")
 
 
-def _safe_float(value: object, default: float = 0.0) -> float:
-    if isinstance(value, str):
-        value = value.replace(",", "").strip()
-    try:
-        out = float(value)
-    except (TypeError, ValueError):
-        return float(default)
-    if out != out:  # NaN
-        return float(default)
-    return float(out)
-
-
 def _parse_user_id(value: object) -> int | None:
-    num = pd.to_numeric(value, errors="coerce")
-    if pd.isna(num):
+    if value is None or isinstance(value, bool):
         return None
-    user_id = int(num)
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return None
+        value = raw
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if numeric != numeric or not numeric.is_integer():
+        return None
+    user_id = int(numeric)
     if user_id <= 0:
         return None
     return user_id
-
-
-@lru_cache(maxsize=4)
-def _load_orders_frame_cached(path_str: str, mtime_ns: int) -> pd.DataFrame:
-    del mtime_ns
-    try:
-        orders = pd.read_pickle(path_str)
-    except Exception:
-        return pd.DataFrame()
-
-    if orders.empty or "order_id" not in orders.columns:
-        return pd.DataFrame()
-
-    user_cols = [column for column in USER_ID_COLUMNS if column in orders.columns]
-    data = orders.loc[:, ["order_id", *user_cols]].copy()
-    del orders
-
-    data["order_id"] = pd.to_numeric(data["order_id"], errors="coerce")
-    data = data.dropna(subset=["order_id"])
-    if data.empty:
-        return pd.DataFrame()
-    data["order_id"] = data["order_id"].astype("int64")
-
-    for column in user_cols:
-        data[column] = pd.to_numeric(data[column], errors="coerce")
-
-    if user_cols:
-        data = data.dropna(subset=user_cols, how="all")
-    data = data.drop_duplicates(subset=["order_id", *user_cols], keep="last")
-
-    return data
-
-
-def _load_orders_frame(base_dir: Path) -> pd.DataFrame:
-    orders_path = get_paths(project_root=base_dir).data_processed_dir / "filtered_orders.pkl"
-    if not orders_path.exists():
-        return pd.DataFrame()
-    return _load_orders_frame_cached(str(orders_path.resolve()), int(orders_path.stat().st_mtime_ns))
-
-
-def _resolve_order_ids_for_user(user_id: int, orders_df: pd.DataFrame) -> list[int]:
-    if orders_df.empty:
-        return []
-
-    user_order_ids: list[int] = []
-    for col in USER_ID_COLUMNS:
-        if col not in orders_df.columns:
-            continue
-        matched = orders_df.loc[orders_df[col] == int(user_id), "order_id"]
-        if matched.empty:
-            continue
-        user_order_ids = [int(oid) for oid in matched.dropna().astype("int64").unique().tolist()]
-        if user_order_ids:
-            break
-
-    # Fallback: if no explicit customer column exists, allow direct order_id lookup.
-    if not user_order_ids and "order_id" in orders_df.columns:
-        if bool((orders_df["order_id"] == int(user_id)).any()):
-            user_order_ids = [int(user_id)]
-
-    if not user_order_ids:
-        return []
-
-    # Keep profile size bounded for predictable API latency.
-    unique_ids = sorted(set(int(oid) for oid in user_order_ids if int(oid) > 0))
-    return unique_ids[-MAX_ORDER_IDS_PER_PROFILE:]
-
-
-def _build_profile_from_orders(user_id: int, order_ids: list[int], order_pool: OrderPool) -> PersonProfile | None:
-    order_ids_clean = sorted({int(oid) for oid in order_ids if int(oid) in order_pool.order_product_ids})
-    if not order_ids_clean:
-        return None
-
-    history_ids: set[int] = set()
-    history_counts: dict[int, int] = {}
-    history_items: list[str] = []
-    seen_names: set[str] = set()
-    for oid in order_ids_clean:
-        for pid in order_pool.order_product_ids.get(oid, ()):
-            pid_int = int(pid)
-            if pid_int <= 0:
-                continue
-            history_ids.add(pid_int)
-            history_counts[pid_int] = int(history_counts.get(pid_int, 0)) + 1
-        for name in order_pool.order_product_names.get(oid, ()):
-            text = str(name).strip()
-            if text and text not in seen_names:
-                seen_names.add(text)
-                history_items.append(text)
-
-    if not history_ids:
-        return None
-
-    return PersonProfile(
-        profile_id=f"api_user_{int(user_id)}",
-        source="api_customer",
-        order_ids=order_ids_clean,
-        history_product_ids=sorted(history_ids),
-        history_items=history_items,
-        created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        history_counts={int(k): int(v) for k, v in sorted(history_counts.items())},
-    )
-
-
-def _latest_run_id(base_dir: Path) -> str:
-    payload = read_latest_manifest(base_dir=base_dir)
-    return str(payload.get("run_id", "") or "").strip()
-
-
-def _probe_profile_for_warmup(order_pool: OrderPool) -> PersonProfile | None:
-    candidate_order_ids = order_pool.preferred_order_ids or order_pool.fallback_order_ids
-    for order_id in candidate_order_ids:
-        profile = _build_profile_from_orders(
-            user_id=0,
-            order_ids=[int(order_id)],
-            order_pool=order_pool,
-        )
-        if profile is not None and len(profile.history_product_ids) >= MIN_HISTORY_PRODUCTS:
-            return profile
-    return None
-
-
-def _warm_recommendation_engine(base_dir: Path, run_id: str, order_pool: OrderPool, bundles_df: pd.DataFrame) -> None:
-    LOGGER.info("[api] warming recommendation engine for readiness")
-    load_personalization_context(base_dir)
-    probe = _probe_profile_for_warmup(order_pool)
-    if probe is None:
-        LOGGER.warning("[api] warmup probe skipped because no suitable profile was found")
-        return
-
-    build_recommendations_for_profiles(
-        bundles_df=bundles_df,
-        profiles=[probe],
-        max_people=1,
-        row_to_record=row_to_record,
-        base_dir=base_dir,
-        run_id=run_id,
-        rng_salt="api-readiness-warmup",
-    )
-    LOGGER.info("[api] recommendation engine warmup completed")
 
 
 def _state_payload() -> dict[str, object]:
@@ -381,8 +211,7 @@ def _state_payload() -> dict[str, object]:
             "initialized_at": str(SERVING_STATE.initialized_at),
             "run_id": str(SERVING_STATE.run_id),
             "artifacts": {name: dict(meta) for name, meta in SERVING_STATE.artifact_meta.items()},
-            "orders_rows": int(len(SERVING_STATE.orders_df.index)) if not SERVING_STATE.orders_df.empty else 0,
-            "bundles_rows": int(len(SERVING_STATE.bundles_df.index)) if not SERVING_STATE.bundles_df.empty else 0,
+            "loaded_user_count": int(len(SERVING_STATE.recommendations_by_user)),
         }
 
 
@@ -405,42 +234,29 @@ def _initialize_serving_state(force_reload: bool = False) -> None:
             artifact_meta = _collect_artifact_meta(base_dir)
             _assert_required_artifacts_present(artifact_meta)
 
-            order_pool = load_order_pool(base_dir)
-            if not order_pool.order_product_ids:
-                raise RuntimeError("Order pool is empty after loading filtered_orders.pkl")
+            final_meta = artifact_meta.get("final_recommendations_by_user", {})
+            final_path_raw = str(final_meta.get("path", "")).strip()
+            if not final_path_raw:
+                raise RuntimeError("Final recommendations artifact path is missing")
 
-            orders_df = _load_orders_frame(base_dir)
-            if orders_df.empty:
-                raise RuntimeError("No usable order rows found in filtered_orders.pkl")
-
-            view = load_bundle_view(base_dir)
-            bundles_df = view.bundles_df if view.bundles_df is not None else pd.DataFrame()
-            if bundles_df.empty:
-                raise RuntimeError("No bundle candidates found in person_candidates_scored.csv")
-
-            run_id = _latest_run_id(base_dir)
-            _warm_recommendation_engine(
-                base_dir=base_dir,
-                run_id=run_id,
-                order_pool=order_pool,
-                bundles_df=bundles_df,
-            )
+            loaded = load_final_recommendations_artifact(Path(final_path_raw))
+            recommendations_by_user = loaded.recommendations_by_user
+            if recommendations_by_user:
+                sample_user = next(iter(recommendations_by_user))
+                _ = recommendations_by_user.get(sample_user, [])
 
             SERVING_STATE.ready = True
             SERVING_STATE.error = ""
             SERVING_STATE.initialized_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
             SERVING_STATE.base_dir = base_dir
-            SERVING_STATE.run_id = run_id
+            SERVING_STATE.run_id = str(loaded.run_id).strip()
             SERVING_STATE.artifact_meta = artifact_meta
-            SERVING_STATE.order_pool = order_pool
-            SERVING_STATE.orders_df = orders_df
-            SERVING_STATE.bundles_df = bundles_df
+            SERVING_STATE.recommendations_by_user = recommendations_by_user
 
             LOGGER.info(
-                "[api] serving state ready duration_sec=%.3f orders_rows=%d bundles_rows=%d run_id=%s",
+                "[api] serving state ready duration_sec=%.3f loaded_user_count=%d run_id=%s",
                 time.perf_counter() - started,
-                int(len(orders_df.index)),
-                int(len(bundles_df.index)),
+                int(len(recommendations_by_user)),
                 SERVING_STATE.run_id,
             )
         except Exception as exc:
@@ -450,9 +266,7 @@ def _initialize_serving_state(force_reload: bool = False) -> None:
             SERVING_STATE.base_dir = base_dir
             SERVING_STATE.run_id = ""
             SERVING_STATE.artifact_meta = artifact_meta
-            SERVING_STATE.order_pool = None
-            SERVING_STATE.orders_df = pd.DataFrame()
-            SERVING_STATE.bundles_df = pd.DataFrame()
+            SERVING_STATE.recommendations_by_user = {}
             LOGGER.exception("[api] serving state initialization failed: %s", exc)
             raise
 
@@ -461,14 +275,12 @@ def _get_serving_assets() -> ServingAssets | None:
     with SERVING_STATE_LOCK:
         if not SERVING_STATE.ready:
             return None
-        if SERVING_STATE.base_dir is None or SERVING_STATE.order_pool is None:
+        if SERVING_STATE.base_dir is None:
             return None
         return ServingAssets(
             base_dir=SERVING_STATE.base_dir,
             run_id=SERVING_STATE.run_id,
-            order_pool=SERVING_STATE.order_pool,
-            orders_df=SERVING_STATE.orders_df,
-            bundles_df=SERVING_STATE.bundles_df,
+            recommendations_by_user=SERVING_STATE.recommendations_by_user,
         )
 
 
@@ -477,60 +289,12 @@ def _recommendation_records_for_user(user_id: int) -> list[dict[str, object]]:
     if assets is None:
         raise ServiceNotReadyError("serving_state_not_ready")
 
-    order_ids = _resolve_order_ids_for_user(user_id, assets.orders_df)
-    if not order_ids:
+    bundles = assets.recommendations_by_user.get(int(user_id))
+    if bundles is None:
         raise CustomerNotFoundError
-
-    profile = _build_profile_from_orders(
-        user_id=user_id,
-        order_ids=order_ids,
-        order_pool=assets.order_pool,
-    )
-    if profile is None or len(profile.history_product_ids) < MIN_HISTORY_PRODUCTS:
+    if not bundles:
         raise InsufficientHistoryError
-
-    bundles_df = assets.bundles_df
-    if bundles_df.empty:
-        raise InsufficientHistoryError
-
-    recommendations = build_recommendations_for_profiles(
-        bundles_df=bundles_df,
-        profiles=[profile],
-        max_people=1,
-        row_to_record=row_to_record,
-        base_dir=assets.base_dir,
-        run_id=assets.run_id,
-    )
-    if not recommendations:
-        raise InsufficientHistoryError
-
-    first = recommendations[0] if isinstance(recommendations[0], dict) else {}
-    bundles = first.get("bundles", [])
-    if not isinstance(bundles, list) or not bundles:
-        raise InsufficientHistoryError
-
-    return [bundle for bundle in bundles if isinstance(bundle, dict)]
-
-
-def _bundle_to_api_record(bundle: dict[str, object]) -> dict[str, object] | None:
-    item_1_id = int(pd.to_numeric(bundle.get("product_a", -1), errors="coerce") or -1)
-    item_2_id = int(pd.to_numeric(bundle.get("product_b", -1), errors="coerce") or -1)
-    if item_1_id <= 0 or item_2_id <= 0 or item_1_id == item_2_id:
-        return None
-
-    sale_a = max(0.0, _safe_float(bundle.get("product_a_price"), default=_safe_float(bundle.get("price_a_sar"), 0.0)))
-    sale_b = max(0.0, _safe_float(bundle.get("product_b_price"), default=_safe_float(bundle.get("price_b_sar"), 0.0)))
-    purchase_a = max(0.0, _safe_float(bundle.get("purchase_price_a"), default=sale_a))
-    purchase_b = max(0.0, _safe_float(bundle.get("purchase_price_b"), default=sale_b))
-    if sale_a >= sale_b:
-        final_paid_price = margin_discounted_sale_price(sale_a, purchase_a, FIXED_MARGIN_DISCOUNT_PCT)
-    else:
-        final_paid_price = margin_discounted_sale_price(sale_b, purchase_b, FIXED_MARGIN_DISCOUNT_PCT)
-    return {
-        "item_1_id": int(item_1_id),
-        "item_2_id": int(item_2_id),
-        "bundle_price": float(round(final_paid_price, 2)),
-    }
+    return bundles[:MAX_BUNDLES]
 
 
 def _error_payload(user_id: int | None, code: str) -> tuple[dict[str, object], int]:
@@ -577,24 +341,11 @@ def recommendations_by_customer():
         return jsonify(body), status
 
     try:
-        raw_bundles = _recommendation_records_for_user(user_id=user_id)
-        bundles: list[dict[str, object]] = []
-        for bundle in raw_bundles:
-            api_bundle = _bundle_to_api_record(bundle)
-            if api_bundle is None:
-                continue
-            bundles.append(api_bundle)
-            if len(bundles) >= MAX_BUNDLES:
-                break
+        bundles = [bundle for bundle in _recommendation_records_for_user(user_id=user_id) if isinstance(bundle, dict)][
+            :MAX_BUNDLES
+        ]
         if not bundles:
-            body, status = _error_payload(user_id, "insufficient_history")
-            LOGGER.info(
-                "[api] recommendations result user_id=%d status=%d bundles=0 duration_sec=%.3f",
-                int(user_id),
-                status,
-                time.perf_counter() - started,
-            )
-            return jsonify(body), status
+            raise InsufficientHistoryError
         LOGGER.info(
             "[api] recommendations result user_id=%d status=200 bundles=%d duration_sec=%.3f",
             int(user_id),

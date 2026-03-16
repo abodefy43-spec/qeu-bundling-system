@@ -11,6 +11,7 @@ from pathlib import Path
 from qeu_bundling.config.paths import ensure_layout, get_paths, move_root_temp_logs, run_output_dir
 from qeu_bundling.core.data_review_pack import generate_review_pack
 from qeu_bundling.core.evaluate_bundle_quality import evaluate_quality
+from qeu_bundling.core.final_recommendations import materialize_final_recommendations_by_user
 from qeu_bundling.core.run_manifest import (
     append_seed_history,
     new_run_id,
@@ -172,6 +173,29 @@ def main(seed: int | None = None, eval_slice: bool = False, retrain_models: bool
     phase_records.append(_phase_record("phase_08", phase_t, "completed"))
     _log_event(run_id, "phase_08", "completed")
 
+    print("\nPHASE 8B: Materialize API Final Recommendations")
+    print("-" * 40)
+    phase_t = time.time()
+    _log_event(run_id, "phase_08b", "start")
+    final_reco = materialize_final_recommendations_by_user()
+    phase_records.append(
+        _phase_record(
+            "phase_08b",
+            phase_t,
+            "completed",
+            profile_count=int(final_reco.profile_count),
+            user_count=int(final_reco.user_count),
+        )
+    )
+    _log_event(
+        run_id,
+        "phase_08b",
+        "completed",
+        profile_count=int(final_reco.profile_count),
+        user_count=int(final_reco.user_count),
+    )
+    print(f"  Output: {final_reco.path} (users={final_reco.user_count:,})")
+
     print("\nPHASE 9: Performance Optimization")
     print("-" * 40)
     phase_t = time.time()
@@ -212,6 +236,7 @@ def main(seed: int | None = None, eval_slice: bool = False, retrain_models: bool
         "person_candidate_pairs": paths.data_processed_candidates_dir / "person_candidate_pairs.csv",
         "person_candidates_scored": paths.output_dir / "person_candidates_scored.csv",
         "person_reco_quality": paths.output_dir / "person_reco_quality.json",
+        "final_recommendations_by_user": paths.output_dir / "final_recommendations_by_user.json",
         "bundle_quality_metrics": paths.output_dir / "bundle_quality_metrics.json",
         "pair_scoring_breakdown": paths.data_processed_diagnostics_dir / "pair_scoring_breakdown.csv",
         "suspicious_pairs_audit": paths.data_processed_diagnostics_dir / "suspicious_pairs_audit.csv",
