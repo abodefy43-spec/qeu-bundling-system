@@ -107,11 +107,22 @@ variable "api_container_port" {
 variable "api_health_check_path" {
   description = "HTTP path used by ALB health checks."
   type        = string
-  default     = "/healthz"
+  default     = "/readyz"
 
   validation {
     condition     = can(regex("^/", var.api_health_check_path))
     error_message = "api_health_check_path must start with '/'."
+  }
+}
+
+variable "api_health_check_timeout_seconds" {
+  description = "ALB target-group health check timeout in seconds for API tasks."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.api_health_check_timeout_seconds >= 2 && var.api_health_check_timeout_seconds <= 120
+    error_message = "api_health_check_timeout_seconds must be between 2 and 120."
   }
 }
 
@@ -152,13 +163,24 @@ variable "api_task_cpu" {
 variable "api_task_memory" {
   description = "Fargate memory (MiB) for the API task definition."
   type        = number
-  default     = 2048
+  default     = 4096
 }
 
 variable "api_desired_count" {
   description = "Desired number of API tasks in the ECS service."
   type        = number
   default     = 2
+}
+
+variable "api_health_check_grace_period_seconds" {
+  description = "Grace period for ECS service target health checks during startup."
+  type        = number
+  default     = 180
+
+  validation {
+    condition     = var.api_health_check_grace_period_seconds >= 0 && var.api_health_check_grace_period_seconds <= 7200
+    error_message = "api_health_check_grace_period_seconds must be between 0 and 7200."
+  }
 }
 
 variable "api_assign_public_ip" {
@@ -168,9 +190,48 @@ variable "api_assign_public_ip" {
 }
 
 variable "api_command" {
-  description = "Optional API container command override."
+  description = "Deprecated. Kept only for backwards compatibility and intentionally ignored."
   type        = list(string)
   default     = []
+}
+
+variable "api_gunicorn_worker_class" {
+  description = "Gunicorn worker class used by the API ECS task."
+  type        = string
+  default     = "gthread"
+}
+
+variable "api_gunicorn_workers" {
+  description = "Gunicorn worker count for API serving."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.api_gunicorn_workers >= 1 && var.api_gunicorn_workers <= 8
+    error_message = "api_gunicorn_workers must be between 1 and 8."
+  }
+}
+
+variable "api_gunicorn_threads" {
+  description = "Gunicorn thread count per worker for API serving."
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.api_gunicorn_threads >= 1 && var.api_gunicorn_threads <= 32
+    error_message = "api_gunicorn_threads must be between 1 and 32."
+  }
+}
+
+variable "api_gunicorn_timeout_seconds" {
+  description = "Gunicorn worker timeout for API serving."
+  type        = number
+  default     = 120
+
+  validation {
+    condition     = var.api_gunicorn_timeout_seconds >= 30 && var.api_gunicorn_timeout_seconds <= 600
+    error_message = "api_gunicorn_timeout_seconds must be between 30 and 600."
+  }
 }
 
 variable "batch_task_cpu" {

@@ -1,8 +1,8 @@
 # Terraform Runbook
 
-This directory contains the AWS foundation stack for QEU.
+This directory contains the AWS infrastructure for QEU API + scheduled batch on ECS/Fargate.
 
-## What current `main.tf` provisions
+## What `main.tf` provisions
 
 - S3 artifacts bucket:
   - versioning enabled
@@ -11,19 +11,24 @@ This directory contains the AWS foundation stack for QEU.
   - public access blocked
 - Optional ECR repositories for API and batch images
 - CloudWatch log groups for API and batch workloads
-- IAM roles/policies for ECS task execution and S3 access
+- IAM roles/policies for ECS task execution, task runtime, and EventBridge invoke
 - Security groups for ALB and API ingress policy
 - ECS cluster
 - ALB, target group, and HTTP listener
+- ECS task definitions for API and batch
+- ECS service for API on Fargate
+- EventBridge scheduled rule + ECS batch target
 
-## What current `main.tf` does **not** provision
+## API Readiness + Memory-Safe Defaults
 
-- ECS task definitions
-- ECS service
-- EventBridge schedule and ECS run target
-- RDS/Redis resources
-
-Treat those as future changes, not part of this stack today.
+- ALB target health check path defaults to `/readyz` (not `/healthz`).
+- API task defaults:
+  - `api_task_cpu = 1024`
+  - `api_task_memory = 4096`
+- Health check controls:
+  - `api_health_check_timeout_seconds = 10`
+  - `api_health_check_grace_period_seconds = 180`
+- Gunicorn runtime should use one worker by default (`gthread`, `workers=1`, `threads=4`).
 
 ## Prerequisites
 
@@ -49,8 +54,8 @@ Edit required values in `terraform.tfvars`:
 
 ```bash
 terraform init
-terraform plan
-terraform apply
+terraform plan -var-file=terraform.tfvars
+terraform apply -var-file=terraform.tfvars
 ```
 
 ## Build and push container images
@@ -82,6 +87,8 @@ Check:
 - S3 artifacts bucket exists with versioning
 - CloudWatch log groups exist
 - IAM roles/policies are attached
+- API service/task definition outputs are present
+- EventBridge batch rule outputs are present
 
 ## Security notes
 

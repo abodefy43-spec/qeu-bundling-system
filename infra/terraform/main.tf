@@ -13,6 +13,16 @@ locals {
 
   name_prefix = "${var.project_name}-${var.environment}"
 
+  api_container_command = [
+    "gunicorn",
+    "--bind", "0.0.0.0:${var.api_container_port}",
+    "--worker-class", var.api_gunicorn_worker_class,
+    "--workers", tostring(var.api_gunicorn_workers),
+    "--threads", tostring(var.api_gunicorn_threads),
+    "--timeout", tostring(var.api_gunicorn_timeout_seconds),
+    "qeu_bundling.api.server:app",
+  ]
+
   artifacts_bucket_name = var.artifacts_bucket_name != "" ? var.artifacts_bucket_name : lower(
     replace(
       "${var.project_name}-${var.environment}-${data.aws_caller_identity.current.account_id}-${data.aws_region.current.name}-artifacts",
@@ -308,7 +318,7 @@ resource "aws_lb_target_group" "api" {
 
     path                = var.api_health_check_path
     interval            = 30
-    timeout             = 5
+    timeout             = var.api_health_check_timeout_seconds
     healthy_threshold   = 2
     unhealthy_threshold = 3
     matcher             = "200-399"
@@ -351,7 +361,7 @@ resource "aws_ecs_task_definition" "api" {
       name      = "api"
       image     = var.api_image
       essential = true
-      command   = length(var.api_command) > 0 ? var.api_command : null
+      command   = local.api_container_command
 
       portMappings = [
         {
@@ -436,6 +446,7 @@ resource "aws_ecs_service" "api" {
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = var.api_health_check_grace_period_seconds
 
   network_configuration {
     subnets          = var.private_subnet_ids

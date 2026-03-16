@@ -26,7 +26,19 @@ create_ecr_repositories = true
 
 # ALB/API target settings
 api_container_port    = 5000
-api_health_check_path = "/healthz"
+api_health_check_path = "/readyz"
+api_health_check_timeout_seconds = 10
+api_health_check_grace_period_seconds = 180
+
+# API task sizing (memory-safe defaults for recommendation serving)
+api_task_cpu    = 1024
+api_task_memory = 4096
+
+# API gunicorn serving settings (memory-safe defaults)
+api_gunicorn_worker_class    = "gthread"
+api_gunicorn_workers         = 1
+api_gunicorn_threads         = 4
+api_gunicorn_timeout_seconds = 120
 
 # Environment maps (consumed by locals in current main.tf)
 common_env = {

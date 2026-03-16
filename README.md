@@ -32,9 +32,9 @@ python -m qeu_bundling.cli run quick
 python -m qeu_bundling.cli serve --host 127.0.0.1 --port 5000
 ```
 
-## AWS Terraform Scaffold (Current State)
+## AWS Terraform Deployment (Current State)
 
-Current `infra/terraform/main.tf` provisions foundational infrastructure:
+Current `infra/terraform/main.tf` provisions:
 
 - S3 artifact bucket (versioning, encryption, lifecycle)
 - Optional ECR repositories for API and batch images
@@ -43,12 +43,8 @@ Current `infra/terraform/main.tf` provisions foundational infrastructure:
 - Security groups
 - ECS cluster
 - ALB, target group, and HTTP listener
-
-### Planned next infrastructure steps (not yet in current `main.tf`)
-
-- ECS task definition/service for API container
-- Scheduled ECS task for batch execution (EventBridge)
-- Optional RDS/Redis resources
+- ECS API task definition + ECS service (Fargate)
+- ECS batch task definition + EventBridge schedule target
 
 ## Why CPU-Only
 
