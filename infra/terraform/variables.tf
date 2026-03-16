@@ -157,19 +157,19 @@ variable "private_subnet_ids" {
 variable "api_task_cpu" {
   description = "Fargate CPU units for the API task definition."
   type        = number
-  default     = 1024
+  default     = 4096
 }
 
 variable "api_task_memory" {
   description = "Fargate memory (MiB) for the API task definition."
   type        = number
-  default     = 4096
+  default     = 16384
 }
 
 variable "api_desired_count" {
   description = "Desired number of API tasks in the ECS service."
   type        = number
-  default     = 2
+  default     = 1
 }
 
 variable "api_health_check_grace_period_seconds" {
@@ -232,6 +232,12 @@ variable "api_gunicorn_timeout_seconds" {
     condition     = var.api_gunicorn_timeout_seconds >= 30 && var.api_gunicorn_timeout_seconds <= 600
     error_message = "api_gunicorn_timeout_seconds must be between 30 and 600."
   }
+}
+
+variable "api_gunicorn_preload" {
+  description = "Enable --preload for gunicorn to validate app import before serving and improve copy-on-write behavior when workers > 1."
+  type        = bool
+  default     = true
 }
 
 variable "batch_task_cpu" {

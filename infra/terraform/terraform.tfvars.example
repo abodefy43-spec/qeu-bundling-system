@@ -31,14 +31,16 @@ api_health_check_timeout_seconds = 10
 api_health_check_grace_period_seconds = 180
 
 # API task sizing (memory-safe defaults for recommendation serving)
-api_task_cpu    = 1024
-api_task_memory = 4096
+api_task_cpu    = 4096
+api_task_memory = 16384
+api_desired_count = 1
 
 # API gunicorn serving settings (memory-safe defaults)
 api_gunicorn_worker_class    = "gthread"
 api_gunicorn_workers         = 1
 api_gunicorn_threads         = 4
 api_gunicorn_timeout_seconds = 120
+api_gunicorn_preload         = true
 
 # Environment maps (consumed by locals in current main.tf)
 common_env = {
@@ -48,11 +50,23 @@ common_env = {
 api_env = {
   QEU_LOCAL_FAST_MODE             = "0"
   QEU_S3_FINAL_RECOMMENDATIONS_KEY = "output/final_recommendations_by_user.json"
+  QEU_S3_FALLBACK_BUNDLE_BANK_KEY  = "output/fallback_bundle_bank.json"
 }
 
 batch_env = {
-  QEU_SERVING_PROFILE = "0"
+  QEU_SERVING_PROFILE                      = "0"
+  QEU_FINAL_RECOMMENDATIONS_MAX_USERS     = "100"
+  QEU_FINAL_RECOMMENDATIONS_USER_SELECTION = "random"
+  QEU_FALLBACK_BUNDLE_BANK_ENABLED        = "1"
+  QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE    = "1000"
+  QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE       = "2000"
+  QEU_FALLBACK_BUNDLE_MIN_SCORE           = "50"
+  QEU_S3_FILTERED_ORDERS_KEY              = "processed/filtered_orders.pkl"
+  QEU_S3_SCORED_CANDIDATES_KEY            = "output/person_candidates_scored.csv"
+  QEU_S3_CANDIDATE_PAIRS_KEY              = "processed/candidates/person_candidate_pairs.csv"
 }
+
+batch_command = ["python", "-m", "qeu_bundling.cli", "run", "materialize-final"]
 
 # Future examples (not consumed by current main.tf)
 # private_subnet_ids       = ["subnet-cccccccc", "subnet-dddddddd"]

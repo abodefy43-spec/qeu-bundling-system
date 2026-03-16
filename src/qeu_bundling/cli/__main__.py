@@ -33,6 +33,27 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Force phase 07 model retraining instead of reusing existing model artifacts",
     )
+    materialize_parser = run_sub.add_parser(
+        "materialize-final",
+        help="Materialize API final recommendations only (no phase reruns)",
+    )
+    materialize_parser.add_argument(
+        "--max-users",
+        type=int,
+        default=None,
+        help="Optional cap on users to materialize (overrides env)",
+    )
+    materialize_parser.add_argument(
+        "--random-sample",
+        action="store_true",
+        help="Sample users randomly when --max-users is set (default: sorted user IDs)",
+    )
+    materialize_parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=None,
+        help="Optional random seed for --random-sample mode",
+    )
 
     serve_parser = sub.add_parser("serve", help="Run Flask dashboard")
     serve_parser.add_argument("--host", default="127.0.0.1")
@@ -56,12 +77,21 @@ def main(argv: list[str] | None = None) -> int:
     ensure_layout(paths)
 
     if args.command == "run":
+        from qeu_bundling.runners.run_materialize_final import main as run_materialize_final
         from qeu_bundling.runners.run_new_results import main as run_quick
         from qeu_bundling.runners.run_pipeline import main as run_full
 
         if args.mode == "full":
             run_full(seed=args.seed, eval_slice=bool(getattr(args, "eval_slice", False)))
             return 0
+        if args.mode == "materialize-final":
+            return int(
+                run_materialize_final(
+                    max_users=getattr(args, "max_users", None),
+                    random_sample=bool(getattr(args, "random_sample", False)),
+                    random_seed=getattr(args, "random_seed", None),
+                )
+            )
         run_quick(
             seed=args.seed,
             eval_slice=bool(getattr(args, "eval_slice", False)),

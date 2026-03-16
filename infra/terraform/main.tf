@@ -13,15 +13,18 @@ locals {
 
   name_prefix = "${var.project_name}-${var.environment}"
 
-  api_container_command = [
-    "gunicorn",
-    "--bind", "0.0.0.0:${var.api_container_port}",
-    "--worker-class", var.api_gunicorn_worker_class,
-    "--workers", tostring(var.api_gunicorn_workers),
-    "--threads", tostring(var.api_gunicorn_threads),
-    "--timeout", tostring(var.api_gunicorn_timeout_seconds),
-    "qeu_bundling.api.server:app",
-  ]
+  api_container_command = concat(
+    [
+      "gunicorn",
+      "--bind", "0.0.0.0:${var.api_container_port}",
+      "--worker-class", var.api_gunicorn_worker_class,
+      "--workers", tostring(var.api_gunicorn_workers),
+      "--threads", tostring(var.api_gunicorn_threads),
+      "--timeout", tostring(var.api_gunicorn_timeout_seconds),
+    ],
+    var.api_gunicorn_preload ? ["--preload"] : [],
+    ["qeu_bundling.api.server:app"],
+  )
 
   artifacts_bucket_name = var.artifacts_bucket_name != "" ? var.artifacts_bucket_name : lower(
     replace(

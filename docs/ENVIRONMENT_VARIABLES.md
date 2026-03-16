@@ -30,6 +30,7 @@ Reference for runtime configuration in local, staging, and production.
 | `QEU_LOCAL_FAST_MODE` | Local dashboard shortcut mode. Keep disabled in production. | Optional | `0` | No |
 | `QEU_DASHBOARD_DEFAULT_PERSON_COUNT` | Default profile count shown in dashboard. | Optional | `10` | No |
 | `QEU_S3_FINAL_RECOMMENDATIONS_KEY` | S3 key for `final_recommendations_by_user.json` (batch upload + API bootstrap). | Optional | `output/final_recommendations_by_user.json` | No |
+| `QEU_S3_FALLBACK_BUNDLE_BANK_KEY` | S3 key for `fallback_bundle_bank.json` generated in batch materialization. | Optional | `output/fallback_bundle_bank.json` | No |
 | `QEU_API_LOG_LEVEL` | API server log level. | Optional | `INFO` | No |
 
 ## Gunicorn Runtime (API Container)
@@ -46,6 +47,16 @@ Reference for runtime configuration in local, staging, and production.
 | Name | Purpose | Required | Example | Secret |
 |---|---|---|---|---|
 | `QEU_SERVING_PROFILE` | Enables serving profiling output. | Optional | `0` | No |
+| `QEU_FINAL_RECOMMENDATIONS_MAX_USERS` | Cap daily final recommendation materialization to the first N users by sorted `user_id` (deterministic test mode). Unset = all users. | Optional | `100` | No |
+| `QEU_FINAL_RECOMMENDATIONS_USER_SELECTION` | User selection mode when `QEU_FINAL_RECOMMENDATIONS_MAX_USERS` is set. `sorted` or `random`. | Optional | `random` | No |
+| `QEU_FINAL_RECOMMENDATIONS_RANDOM_SEED` | Optional random seed for reproducible `random` selection mode. | Optional | `42` | No |
+| `QEU_FALLBACK_BUNDLE_BANK_ENABLED` | Enable offline fallback bank generation/backfill during final materialization. | Optional | `1` | No |
+| `QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE` | Target number of globally ranked fallback bundles to keep. | Optional | `1000` | No |
+| `QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE` | Hard upper cap for fallback bank size. | Optional | `2000` | No |
+| `QEU_FALLBACK_BUNDLE_MIN_SCORE` | Optional minimum fallback quality score threshold. Unset uses rule-based filtering only. | Optional | `50` | No |
+| `QEU_S3_FILTERED_ORDERS_KEY` | S3 key for `filtered_orders.pkl` used by `run materialize-final`. | Optional | `processed/filtered_orders.pkl` | No |
+| `QEU_S3_SCORED_CANDIDATES_KEY` | S3 key for `person_candidates_scored.csv` used by `run materialize-final`. | Optional | `output/person_candidates_scored.csv` | No |
+| `QEU_S3_CANDIDATE_PAIRS_KEY` | S3 key for `person_candidate_pairs.csv` fallback used by `run materialize-final`. | Optional | `processed/candidates/person_candidate_pairs.csv` | No |
 
 ## Shared Recommendation Flags
 

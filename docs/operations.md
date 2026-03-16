@@ -26,6 +26,23 @@ This moves legacy files from:
 python -m qeu_bundling.cli run full
 ```
 
+### Full Pipeline (100-user precompute test mode)
+
+```bash
+QEU_FINAL_RECOMMENDATIONS_MAX_USERS=100 python -m qeu_bundling.cli run full
+```
+
+### Materialize Final Recommendations Only (No Phase Rerun)
+
+```bash
+QEU_FINAL_RECOMMENDATIONS_MAX_USERS=100 \
+QEU_FINAL_RECOMMENDATIONS_USER_SELECTION=random \
+QEU_FALLBACK_BUNDLE_BANK_ENABLED=1 \
+QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE=1000 \
+QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE=2000 \
+python -m qeu_bundling.cli run materialize-final
+```
+
 ### Quick Refresh
 
 ```bash

@@ -23,12 +23,13 @@ This directory contains the AWS infrastructure for QEU API + scheduled batch on 
 
 - ALB target health check path defaults to `/readyz` (not `/healthz`).
 - API task defaults:
-  - `api_task_cpu = 1024`
-  - `api_task_memory = 4096`
+  - `api_task_cpu = 4096`
+  - `api_task_memory = 16384`
+  - `api_desired_count = 1` (set higher only when you need extra replica capacity)
 - Health check controls:
   - `api_health_check_timeout_seconds = 10`
   - `api_health_check_grace_period_seconds = 180`
-- Gunicorn runtime should use one worker by default (`gthread`, `workers=1`, `threads=4`).
+- Gunicorn runtime should use one worker by default (`gthread`, `workers=1`, `threads=4`, `--preload=true`).
 
 ## Prerequisites
 
