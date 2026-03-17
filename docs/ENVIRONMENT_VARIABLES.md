@@ -47,8 +47,8 @@ Reference for runtime configuration in local, staging, and production.
 | Name | Purpose | Required | Example | Secret |
 |---|---|---|---|---|
 | `QEU_SERVING_PROFILE` | Enables serving profiling output. | Optional | `0` | No |
-| `QEU_FINAL_RECOMMENDATIONS_MAX_USERS` | Cap daily final recommendation materialization to the first N users by sorted `user_id` (deterministic test mode). Unset = all users. | Optional | `100` | No |
-| `QEU_FINAL_RECOMMENDATIONS_USER_SELECTION` | User selection mode when `QEU_FINAL_RECOMMENDATIONS_MAX_USERS` is set. `sorted` or `random`. | Optional | `random` | No |
+| `QEU_FINAL_RECOMMENDATIONS_MAX_USERS` | Cap final recommendation materialization to N users (test mode). Unset/empty/`0`/`off`/`unlimited` = full uncapped user set. | Optional | _(unset)_ | No |
+| `QEU_FINAL_RECOMMENDATIONS_USER_SELECTION` | User selection mode when `QEU_FINAL_RECOMMENDATIONS_MAX_USERS` is set. `sorted` or `random`. | Optional | `sorted` | No |
 | `QEU_FINAL_RECOMMENDATIONS_RANDOM_SEED` | Optional random seed for reproducible `random` selection mode. | Optional | `42` | No |
 | `QEU_FALLBACK_BUNDLE_BANK_ENABLED` | Enable offline fallback bank generation/backfill during final materialization. | Optional | `1` | No |
 | `QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE` | Target number of globally ranked fallback bundles to keep. | Optional | `1000` | No |

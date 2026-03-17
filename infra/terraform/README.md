@@ -31,6 +31,21 @@ This directory contains the AWS infrastructure for QEU API + scheduled batch on 
   - `api_health_check_grace_period_seconds = 180`
 - Gunicorn runtime should use one worker by default (`gthread`, `workers=1`, `threads=4`, `--preload=true`).
 
+## Runtime Separation
+
+- API is an always-on ECS **service** (`aws_ecs_service.api`) and should run 24/7.
+- Batch is an ECS **task definition** invoked by EventBridge (`aws_cloudwatch_event_target.batch_task`), not a service.
+- Each scheduled batch run is one-off: it runs, writes artifacts, uploads to S3, then exits.
+
+## Batch Modes
+
+- Production daily mode (full compute): set `batch_command = ["python", "-m", "qeu_bundling.cli", "run", "full"]`.
+- Fast test mode (10 users, same materialization flow): run one-off task override with:
+
+```bash
+python -m qeu_bundling.cli run materialize-final --max-users 10
+```
+
 ## Prerequisites
 
 - Terraform `>= 1.6`

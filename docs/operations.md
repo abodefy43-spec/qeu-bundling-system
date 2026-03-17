@@ -20,39 +20,50 @@ This moves legacy files from:
 
 ## Common Commands
 
-### Full Pipeline
+### API (24/7 service process)
 
 ```bash
+python -m qeu_bundling.cli serve --host 0.0.0.0 --port 5000
+```
+
+### Daily batch compute (full uncapped run)
+
+```bash
+unset QEU_FINAL_RECOMMENDATIONS_MAX_USERS
 python -m qeu_bundling.cli run full
 ```
 
-### Full Pipeline (100-user precompute test mode)
+### Daily batch compute (materialize final artifact only, uncapped)
 
 ```bash
-QEU_FINAL_RECOMMENDATIONS_MAX_USERS=100 python -m qeu_bundling.cli run full
-```
-
-### Materialize Final Recommendations Only (No Phase Rerun)
-
-```bash
-QEU_FINAL_RECOMMENDATIONS_MAX_USERS=100 \
-QEU_FINAL_RECOMMENDATIONS_USER_SELECTION=random \
-QEU_FALLBACK_BUNDLE_BANK_ENABLED=1 \
-QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE=1000 \
-QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE=2000 \
+unset QEU_FINAL_RECOMMENDATIONS_MAX_USERS
 python -m qeu_bundling.cli run materialize-final
 ```
 
-### Quick Refresh
+Batch runs are one-off processes and exit after artifact upload. The API keeps serving the currently loaded artifact until you roll/restart API tasks.
+
+### Fast test mode (10 users, same materialization path)
+
+```bash
+python -m qeu_bundling.cli run materialize-final --max-users 10
+```
+
+### Fast test mode (10 users random sample, reproducible)
+
+```bash
+python -m qeu_bundling.cli run materialize-final --max-users 10 --random-sample --random-seed 42
+```
+
+### Quick refresh (phases 6-9 + final materialization)
 
 ```bash
 python -m qeu_bundling.cli run quick
 ```
 
-### Dashboard
+### Dashboard (local)
 
 ```bash
-python -m qeu_bundling.cli serve
+python -m qeu_bundling.cli serve --host 127.0.0.1 --port 5000
 ```
 
 ### Usage Summary

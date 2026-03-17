@@ -4,8 +4,8 @@ QEU is a Python recommendation system for retail product bundles. The workload i
 
 ## Runtime Model
 
-- **Batch generation (heavy):** builds candidates, applies rules and scoring, and writes recommendation artifacts.
-- **API/dashboard serving (light):** reads precomputed artifacts and returns responses.
+- **Batch generation (heavy, scheduled):** runs once per day, builds candidates, applies rules/scoring, writes artifacts, and exits.
+- **API serving (light, always-on):** runs 24/7, loads precomputed artifacts at startup, and serves lookup-only responses.
 - **Dependency split:** `requirements.api.txt` for serving image, `requirements.batch.txt` for batch image.
 
 The API path is intended for serving precomputed results, not full inline recommendation generation.

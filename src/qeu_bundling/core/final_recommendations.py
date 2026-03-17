@@ -33,6 +33,16 @@ DEFAULT_FINAL_RECOMMENDATIONS_S3_KEY = f"output/{FINAL_RECOMMENDATIONS_ARTIFACT}
 FINAL_RECOMMENDATIONS_MAX_USERS_ENV = "QEU_FINAL_RECOMMENDATIONS_MAX_USERS"
 FINAL_RECOMMENDATIONS_USER_SELECTION_ENV = "QEU_FINAL_RECOMMENDATIONS_USER_SELECTION"
 FINAL_RECOMMENDATIONS_RANDOM_SEED_ENV = "QEU_FINAL_RECOMMENDATIONS_RANDOM_SEED"
+FINAL_RECOMMENDATIONS_MAX_USERS_DISABLED_TOKENS = {
+    "0",
+    "all",
+    "off",
+    "none",
+    "null",
+    "false",
+    "disabled",
+    "unlimited",
+}
 FALLBACK_BUNDLE_BANK_ARTIFACT = "fallback_bundle_bank.json"
 DEFAULT_FALLBACK_BUNDLE_BANK_S3_KEY = f"output/{FALLBACK_BUNDLE_BANK_ARTIFACT}"
 BUNDLE_IDS_ARTIFACT = "bundle_ids.csv"
@@ -142,15 +152,17 @@ def resolve_final_recommendations_max_users(value: object) -> int | None:
     raw = str(value or "").strip()
     if not raw:
         return None
+    if raw.lower() in FINAL_RECOMMENDATIONS_MAX_USERS_DISABLED_TOKENS:
+        return None
     try:
         parsed = int(raw)
     except (TypeError, ValueError) as exc:
         raise ValueError(
-            f"{FINAL_RECOMMENDATIONS_MAX_USERS_ENV} must be a positive integer; got {raw!r}"
+            f"{FINAL_RECOMMENDATIONS_MAX_USERS_ENV} must be a positive integer or disabled token; got {raw!r}"
         ) from exc
     if parsed <= 0:
         raise ValueError(
-            f"{FINAL_RECOMMENDATIONS_MAX_USERS_ENV} must be a positive integer; got {raw!r}"
+            f"{FINAL_RECOMMENDATIONS_MAX_USERS_ENV} must be a positive integer or disabled token; got {raw!r}"
         )
     return int(parsed)
 

@@ -364,16 +364,19 @@ class FinalRecommendationsTests(unittest.TestCase):
     def test_resolve_max_users_from_value_and_env(self):
         self.assertIsNone(resolve_final_recommendations_max_users(None))
         self.assertIsNone(resolve_final_recommendations_max_users("   "))
+        self.assertIsNone(resolve_final_recommendations_max_users("0"))
+        self.assertIsNone(resolve_final_recommendations_max_users("off"))
+        self.assertIsNone(resolve_final_recommendations_max_users("unlimited"))
         self.assertEqual(resolve_final_recommendations_max_users("100"), 100)
 
         with self.assertRaisesRegex(ValueError, FINAL_RECOMMENDATIONS_MAX_USERS_ENV):
             resolve_final_recommendations_max_users("abc")
         with self.assertRaisesRegex(ValueError, FINAL_RECOMMENDATIONS_MAX_USERS_ENV):
             resolve_final_recommendations_max_users("-1")
-        with self.assertRaisesRegex(ValueError, FINAL_RECOMMENDATIONS_MAX_USERS_ENV):
-            resolve_final_recommendations_max_users("0")
 
         with patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(resolve_final_recommendations_max_users_from_env())
+        with patch.dict(os.environ, {FINAL_RECOMMENDATIONS_MAX_USERS_ENV: "0"}, clear=False):
             self.assertIsNone(resolve_final_recommendations_max_users_from_env())
         with patch.dict(os.environ, {FINAL_RECOMMENDATIONS_MAX_USERS_ENV: "100"}, clear=False):
             self.assertEqual(resolve_final_recommendations_max_users_from_env(), 100)
