@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import logging
 import os
@@ -69,6 +70,24 @@ BUNDLE_ID_COLUMNS = (
 USER_ID_COLUMNS = ("user_id", "customer_id", "customer_no", "partner_id")
 MIN_HISTORY_PRODUCTS = 2
 MAX_ORDER_IDS_PER_PROFILE = 6
+FALLBACK_PREMIUM_POOL_MULTIPLIER = 6
+FALLBACK_PREMIUM_POOL_MIN = 18
+PERSONALIZED_HISTORY_PRIMARY_BOOST = 1.35
+PERSONALIZED_HISTORY_SECONDARY_BOOST = 0.35
+PERSONALIZED_UPSTREAM_SCORE_WEIGHT = 0.45
+PERSONALIZED_CONFIDENCE_WEIGHT = 0.03
+PERSONALIZED_UPSTREAM_RANK_PENALTY = 0.14
+PERSONALIZED_GENERIC_THEME_PENALTY = 0.9
+FALLBACK_HISTORY_PRIMARY_BOOST = 1.2
+FALLBACK_HISTORY_SECONDARY_BOOST = 0.3
+FALLBACK_SUPPORT_SIGNAL_BONUS = 1.2
+FALLBACK_GENERIC_LOW_SIGNAL_PENALTY = 5.0
+FALLBACK_GENERIC_SINGLE_SIGNAL_PENALTY = 2.0
+FALLBACK_GENERIC_SAME_CATEGORY_PENALTY = 3.5
+FALLBACK_GENERIC_STAPLE_OVERLAP_PENALTY = 7.5
+FALLBACK_QUALITY_BAND_WIDTH = 12.0
+FALLBACK_BANK_PREMIUM_WINDOW_MULTIPLIER = 4
+FALLBACK_BANK_PREMIUM_WINDOW_MIN = 18
 
 
 @dataclass(frozen=True)
@@ -126,6 +145,121 @@ def _safe_positive_int(value: object) -> int | None:
     if out <= 0:
         return None
     return int(out)
+
+
+def _history_support_boost(overlap: int, *, first: float, second: float) -> float:
+    overlap_int = max(0, int(overlap))
+    if overlap_int <= 0:
+        return 0.0
+    return float(first + (max(0, overlap_int - 1) * second))
+
+
+def _quality_band(score: object, *, width: float = FALLBACK_QUALITY_BAND_WIDTH) -> int:
+    band_width = max(0.5, float(width))
+    return int(float(_safe_float(score, 0.0)) // band_width)
+
+
+def _bundle_origin_group(bundle: dict[str, object]) -> str:
+    if not isinstance(bundle, dict):
+        return "other"
+    origin = str(bundle.get("recommendation_origin", bundle.get("recommendation_origin_raw", bundle.get("source", "")))).strip().lower()
+    if origin in {"top_bundle", "copurchase_fallback", "fallback_food", "fallback_cleaning"}:
+        return origin
+    if origin.startswith("fallback_cleaning"):
+        return "fallback_cleaning"
+    if origin.startswith("fallback"):
+        return "fallback_food"
+    return "other"
+
+
+def _bundle_origin_bonus(origin_group: str) -> float:
+    return float(
+        {
+            "top_bundle": 1.6,
+            "copurchase_fallback": 0.8,
+            "fallback_food": 0.2,
+            "fallback_cleaning": -0.4,
+            "other": 0.0,
+        }.get(str(origin_group).strip().lower(), 0.0)
+    )
+
+
+def _pair_strength_bonus(value: object) -> float:
+    raw = str(value or "").strip().lower()
+    return float(
+        {
+            "strong": 1.2,
+            "medium": 0.35,
+            "weak": -0.35,
+        }.get(raw, 0.0)
+    )
+
+
+def _fallback_support_signal_count(row: dict[str, object]) -> int:
+    pair_count = float(_safe_float(row.get("pair_count"), 0.0))
+    recipe_compat = float(_safe_float(row.get("recipe_compat_score"), default=_safe_float(row.get("recipe_score_norm"), 0.0)))
+    shared_categories_count = float(_safe_float(row.get("shared_categories_count"), 0.0))
+    known_prior_flag = float(_safe_float(row.get("known_prior_flag"), 0.0))
+    signals = 0
+    if pair_count >= 3.0:
+        signals += 1
+    if recipe_compat >= 0.65:
+        signals += 1
+    if shared_categories_count >= 2.0:
+        signals += 1
+    if known_prior_flag > 0.0:
+        signals += 1
+    return int(signals)
+
+
+def _fallback_genericity_penalty(row: dict[str, object]) -> float:
+    pair_count = float(_safe_float(row.get("pair_count"), 0.0))
+    recipe_compat = float(_safe_float(row.get("recipe_compat_score"), default=_safe_float(row.get("recipe_score_norm"), 0.0)))
+    shared_categories_count = float(_safe_float(row.get("shared_categories_count"), 0.0))
+    known_prior_flag = float(_safe_float(row.get("known_prior_flag"), 0.0))
+    category_a = str(row.get("category_a", "") or "").strip().lower()
+    category_b = str(row.get("category_b", "") or "").strip().lower()
+    support_signal_count = _fallback_support_signal_count(row)
+
+    penalty = 0.0
+    if support_signal_count <= 1:
+        penalty += FALLBACK_GENERIC_LOW_SIGNAL_PENALTY
+    elif support_signal_count == 2 and recipe_compat < 0.65 and pair_count < 4.0:
+        penalty += FALLBACK_GENERIC_SINGLE_SIGNAL_PENALTY
+    if category_a and category_b and category_a == category_b and recipe_compat < 0.75 and pair_count < 5.0:
+        penalty += FALLBACK_GENERIC_SAME_CATEGORY_PENALTY
+    if _is_truthy_numeric(row.get("only_staples_overlap")):
+        penalty += FALLBACK_GENERIC_STAPLE_OVERLAP_PENALTY
+    if known_prior_flag <= 0.0 and pair_count < 3.0 and shared_categories_count >= 2.0 and recipe_compat < 0.65:
+        penalty += 1.5
+    return float(penalty)
+
+
+def _bundle_use_case_reject_reason(row: dict[str, object]) -> str | None:
+    pair_count = float(_safe_float(row.get("pair_count"), 0.0))
+    recipe_compat = float(_safe_float(row.get("recipe_compat_score"), default=_safe_float(row.get("recipe_score_norm"), 0.0)))
+    shared_categories_count = float(_safe_float(row.get("shared_categories_count"), 0.0))
+    known_prior_flag = float(_safe_float(row.get("known_prior_flag"), 0.0))
+    same_category = str(row.get("category_a", "") or "").strip().lower() == str(row.get("category_b", "") or "").strip().lower()
+    support_signal_count = _fallback_support_signal_count(row)
+
+    if support_signal_count <= 0:
+        return "no_use_case_signal"
+    if support_signal_count == 1 and pair_count < 4.0 and recipe_compat < 0.72:
+        return "single_signal_weak_pair"
+    if shared_categories_count >= 2.0 and pair_count < 3.0 and recipe_compat < 0.65 and known_prior_flag <= 0.0:
+        return "category_only_pair"
+    if same_category and pair_count < 5.0 and recipe_compat < 0.75 and known_prior_flag <= 0.0:
+        return "same_category_generic"
+    if _is_truthy_numeric(row.get("only_staples_overlap")) and pair_count < 6.0 and recipe_compat < 0.90:
+        return "staple_collision"
+    if pair_count < 2.0 and recipe_compat < 0.60 and shared_categories_count <= 1.0 and known_prior_flag <= 0.0:
+        return "no_clear_use_case"
+    return None
+
+
+def _validate_bundle_use_case(row: dict[str, object]) -> bool:
+    return _bundle_use_case_reject_reason(row) is None
 
 
 def _resolve_bool_flag(value: object, *, env_name: str, default: bool) -> bool:
@@ -441,6 +575,49 @@ def _bundle_pair_key(item_1_id: int, item_2_id: int) -> tuple[int, int]:
     return (b, a)
 
 
+def _stable_hash_int(value: object) -> int:
+    raw = str(value or "").strip()
+    if not raw:
+        return 0
+    digest = hashlib.sha1(raw.encode("utf-8")).digest()
+    return int.from_bytes(digest[:8], byteorder="big", signed=False)
+
+
+def _run_rotation_hint(run_id: str) -> int:
+    raw = str(run_id or "").strip()
+    if not raw:
+        return 0
+    digits = re.findall(r"\d+", raw)
+    if digits:
+        try:
+            return max(0, int(digits[-1]))
+        except (TypeError, ValueError):
+            pass
+    return _stable_hash_int(raw)
+
+
+def _rotated_index_order(length: int, start: int) -> list[int]:
+    size = int(length)
+    if size <= 0:
+        return []
+    offset = int(start) % size
+    return list(range(offset, size)) + list(range(0, offset))
+
+
+def _coprime_rotation_step(size: int) -> int:
+    candidate = 2
+    pool_size = max(1, int(size))
+    while candidate < pool_size:
+        left = candidate
+        right = pool_size
+        while right:
+            left, right = right, left % right
+        if left == 1:
+            return int(candidate)
+        candidate += 1
+    return 1
+
+
 def _bundle_id_sequence(bundle_id: str) -> int:
     raw = str(bundle_id or "").strip()
     if not raw:
@@ -663,6 +840,8 @@ def _passes_fallback_quality_filters(row: dict[str, object], *, min_score: float
         return False
     if _safe_float(row.get("utility_penalty_multiplier"), 1.0) < 0.95:
         return False
+    if not _validate_bundle_use_case(row):
+        return False
 
     quality_score = _fallback_quality_score(row)
     if min_score is not None and quality_score < float(min_score):
@@ -681,7 +860,16 @@ def _passes_fallback_quality_filters(row: dict[str, object], *, min_score: float
     if not has_evidence:
         return False
 
+    if pair_count < 2.0 and recipe_compat < 0.50 and known_prior_flag <= 0.0:
+        return False
+
+    if pair_count < 3.0 and shared_categories_count <= 1.0 and recipe_compat < 0.55:
+        return False
+
     if _is_truthy_numeric(row.get("only_staples_overlap")) and recipe_compat < 0.85 and pair_count < 2.0:
+        return False
+
+    if _is_truthy_numeric(row.get("only_staples_overlap")) and known_prior_flag <= 0.0 and pair_count < 4.0:
         return False
     return True
 
@@ -694,15 +882,310 @@ def _fallback_category_key(row: dict[str, object]) -> tuple[str, str]:
     return (b, a)
 
 
+def _build_pair_quality_lookup(bundles_df: pd.DataFrame) -> dict[tuple[int, int], dict[str, object]]:
+    if bundles_df.empty:
+        return {}
+
+    lookup: dict[tuple[int, int], dict[str, object]] = {}
+    for row in bundles_df.to_dict(orient="records"):
+        if not isinstance(row, dict):
+            continue
+        api_record = _bundle_to_api_record(row)
+        if api_record is None:
+            continue
+        pair_key = _bundle_pair_key(int(api_record["item_1_id"]), int(api_record["item_2_id"]))
+        category_a, category_b = _fallback_category_key(row)
+        quality_row = {
+            "quality_score": float(round(_fallback_quality_score(row), 6)),
+            "final_score": float(
+                _safe_float(
+                    row.get("new_final_score"),
+                    default=_safe_float(row.get("final_score"), 0.0),
+                )
+            ),
+            "pair_count": float(_safe_float(row.get("pair_count"), 0.0)),
+            "recipe_compat_score": float(
+                _safe_float(
+                    row.get("recipe_compat_score"),
+                    default=_safe_float(row.get("recipe_score_norm"), 0.0),
+                )
+            ),
+            "shared_categories_count": float(_safe_float(row.get("shared_categories_count"), 0.0)),
+            "known_prior_flag": float(_safe_float(row.get("known_prior_flag"), 0.0)),
+            "pair_penalty_multiplier": float(_safe_float(row.get("pair_penalty_multiplier"), 1.0)),
+            "utility_penalty_multiplier": float(_safe_float(row.get("utility_penalty_multiplier"), 1.0)),
+            "weak_evidence_free_blocked": int(1 if _is_truthy_numeric(row.get("weak_evidence_free_blocked")) else 0),
+            "only_staples_overlap": int(1 if _is_truthy_numeric(row.get("only_staples_overlap")) else 0),
+            "support_signal_count": int(_fallback_support_signal_count(row)),
+            "genericity_penalty": float(_fallback_genericity_penalty(row)),
+            "use_case_valid": int(1 if _validate_bundle_use_case(row) else 0),
+            "use_case_reject_reason": str(_bundle_use_case_reject_reason(row) or ""),
+            "category_key": f"{category_a}|{category_b}",
+        }
+        existing = lookup.get(pair_key)
+        if existing is None:
+            lookup[pair_key] = quality_row
+            continue
+        if (
+            float(quality_row["quality_score"]),
+            float(quality_row["final_score"]),
+            float(quality_row["pair_count"]),
+        ) > (
+            float(existing.get("quality_score", 0.0)),
+            float(existing.get("final_score", 0.0)),
+            float(existing.get("pair_count", 0.0)),
+        ):
+            lookup[pair_key] = quality_row
+    return lookup
+
+
+def _history_overlap_count(item_1_id: int, item_2_id: int, history_product_ids: set[int]) -> int:
+    if not history_product_ids:
+        return 0
+    overlap = 0
+    if int(item_1_id) in history_product_ids:
+        overlap += 1
+    if int(item_2_id) in history_product_ids:
+        overlap += 1
+    return int(overlap)
+
+
+def _personalized_candidate_score(
+    *,
+    bundle: dict[str, object],
+    candidate_rank: int,
+    item_1_id: int,
+    item_2_id: int,
+    metadata: dict[str, object] | None,
+    history_product_ids: set[int],
+) -> tuple[float, int, float]:
+    meta = metadata or {}
+    history_overlap = _history_overlap_count(item_1_id, item_2_id, history_product_ids)
+    quality_score = float(_safe_float(meta.get("quality_score"), 0.0))
+    pair_count = float(_safe_float(meta.get("pair_count"), 0.0))
+    recipe_compat = float(_safe_float(meta.get("recipe_compat_score"), 0.0))
+    known_prior = float(_safe_float(meta.get("known_prior_flag"), 0.0))
+    support_signal_count = float(_safe_float(meta.get("support_signal_count"), 0.0))
+    genericity_penalty = float(_safe_float(meta.get("genericity_penalty"), 0.0))
+    upstream_score = float(_safe_float(bundle.get("hybrid_reco_score"), 0.0))
+    confidence_score = float(_safe_float(bundle.get("confidence_score"), 0.0))
+    theme = str(bundle.get("bundle_theme", bundle.get("theme", ""))).strip().lower()
+    origin_group = _bundle_origin_group(bundle)
+    score = quality_score
+    score += PERSONALIZED_UPSTREAM_SCORE_WEIGHT * upstream_score
+    score += PERSONALIZED_CONFIDENCE_WEIGHT * confidence_score
+    score += _bundle_origin_bonus(origin_group)
+    score += _pair_strength_bonus(bundle.get("pair_strength"))
+    score += 0.45 * min(support_signal_count, 4.0)
+    score += _history_support_boost(
+        history_overlap,
+        first=PERSONALIZED_HISTORY_PRIMARY_BOOST,
+        second=PERSONALIZED_HISTORY_SECONDARY_BOOST,
+    )
+    score -= PERSONALIZED_UPSTREAM_RANK_PENALTY * float(max(0, int(candidate_rank)))
+    score -= 0.55 * genericity_penalty
+    if theme.endswith("_generic"):
+        score -= PERSONALIZED_GENERIC_THEME_PENALTY
+
+    if history_overlap <= 0 and pair_count < 2.0 and recipe_compat < 0.50 and known_prior <= 0.0:
+        score -= 7.0
+    if _safe_float(meta.get("pair_penalty_multiplier"), 1.0) < 0.95:
+        score -= 4.5
+    if _safe_float(meta.get("utility_penalty_multiplier"), 1.0) < 0.95:
+        score -= 3.0
+    if _is_truthy_numeric(meta.get("only_staples_overlap")) and history_overlap <= 0 and pair_count < 4.0:
+        score -= 5.0
+    return float(score), int(history_overlap), float(quality_score)
+
+
+def _reject_personalized_candidate(metadata: dict[str, object] | None) -> bool:
+    if metadata is None:
+        return False
+    if int(_safe_float(metadata.get("use_case_valid"), 1.0)) <= 0:
+        return True
+    if _is_truthy_numeric(metadata.get("weak_evidence_free_blocked")):
+        return True
+    if _safe_float(metadata.get("pair_penalty_multiplier"), 1.0) < 0.88:
+        return True
+    if _safe_float(metadata.get("utility_penalty_multiplier"), 1.0) < 0.88:
+        return True
+    pair_count = _safe_float(metadata.get("pair_count"), 0.0)
+    recipe_compat = _safe_float(metadata.get("recipe_compat_score"), 0.0)
+    shared_categories_count = _safe_float(metadata.get("shared_categories_count"), 0.0)
+    known_prior = _safe_float(metadata.get("known_prior_flag"), 0.0)
+    if pair_count < 1.0 and recipe_compat < 0.45 and shared_categories_count < 2.0 and known_prior <= 0.0:
+        return True
+    return False
+
+
+def _select_personalized_bundles_for_user(
+    *,
+    bundles_raw: list[dict[str, object]],
+    max_bundles_per_user: int,
+    history_product_ids: set[int],
+    pair_quality_lookup: dict[tuple[int, int], dict[str, object]],
+) -> list[dict[str, object]]:
+    target = max(1, int(max_bundles_per_user))
+    if not bundles_raw:
+        return []
+
+    candidates: list[dict[str, object]] = []
+    seen_pairs: set[tuple[int, int]] = set()
+    for candidate_rank, bundle in enumerate(bundles_raw):
+        if not isinstance(bundle, dict):
+            continue
+        api_record = _bundle_to_api_record(bundle)
+        if api_record is None:
+            continue
+        item_1_id = int(api_record["item_1_id"])
+        item_2_id = int(api_record["item_2_id"])
+        pair_key = _bundle_pair_key(item_1_id, item_2_id)
+        if pair_key in seen_pairs:
+            continue
+        seen_pairs.add(pair_key)
+
+        metadata = pair_quality_lookup.get(pair_key)
+        if _reject_personalized_candidate(metadata):
+            continue
+
+        score, history_overlap, quality_score = _personalized_candidate_score(
+            bundle=bundle,
+            candidate_rank=int(candidate_rank),
+            item_1_id=item_1_id,
+            item_2_id=item_2_id,
+            metadata=metadata,
+            history_product_ids=history_product_ids,
+        )
+        candidates.append(
+            {
+                "record": api_record,
+                "pair_key": pair_key,
+                "category_key": str((metadata or {}).get("category_key", "")),
+                "lane_key": str(bundle.get("lane", "")).strip().lower(),
+                "origin_group": _bundle_origin_group(bundle),
+                "candidate_rank": int(candidate_rank),
+                "score": float(score),
+                "history_overlap": int(history_overlap),
+                "quality_score": float(quality_score),
+            }
+        )
+
+    candidates.sort(
+        key=lambda entry: (
+            -float(entry.get("score", 0.0)),
+            int(entry.get("candidate_rank", 0)),
+            -float(entry.get("quality_score", 0.0)),
+            str(entry.get("origin_group", "")),
+            int(entry.get("pair_key", (0, 0))[0]),
+            int(entry.get("pair_key", (0, 0))[1]),
+        )
+    )
+
+    selected: list[dict[str, object]] = []
+    pair_seen: set[tuple[int, int]] = set()
+    item_seen: set[int] = set()
+    category_seen: set[str] = set()
+    lane_seen: set[str] = set()
+    for strict_no_item_overlap, strict_lane_diversity, strict_category_diversity in (
+        (True, True, True),
+        (True, True, False),
+        (True, False, True),
+        (True, False, False),
+        (False, False, True),
+        (False, False, False),
+    ):
+        if len(selected) >= target:
+            break
+        for entry in candidates:
+            if len(selected) >= target:
+                break
+            pair_key = tuple(entry.get("pair_key", (0, 0)))
+            if pair_key in pair_seen:
+                continue
+            record = entry.get("record")
+            if not isinstance(record, dict):
+                continue
+            item_1_id = _safe_positive_int(record.get("item_1_id"))
+            item_2_id = _safe_positive_int(record.get("item_2_id"))
+            if item_1_id is None or item_2_id is None or item_1_id == item_2_id:
+                continue
+            if strict_no_item_overlap and (int(item_1_id) in item_seen or int(item_2_id) in item_seen):
+                continue
+            lane_key = str(entry.get("lane_key", "")).strip().lower()
+            if strict_lane_diversity and lane_key and lane_key in lane_seen and target >= 3:
+                continue
+            category_key = str(entry.get("category_key", ""))
+            if strict_category_diversity and category_key and category_key in category_seen and int(
+                entry.get("history_overlap", 0)
+            ) <= 0:
+                continue
+            selected.append(
+                {
+                    "item_1_id": int(item_1_id),
+                    "item_2_id": int(item_2_id),
+                    "bundle_price": float(round(max(0.0, _safe_float(record.get("bundle_price"), 0.0)), 2)),
+                }
+            )
+            pair_seen.add(_bundle_pair_key(int(item_1_id), int(item_2_id)))
+            item_seen.add(int(item_1_id))
+            item_seen.add(int(item_2_id))
+            if category_key:
+                category_seen.add(category_key)
+            if lane_key:
+                lane_seen.add(lane_key)
+    return selected[:target]
+
+
+def _order_fallback_bank_candidates_for_run(
+    candidates: list[dict[str, object]],
+    *,
+    run_id: str,
+    target_size: int,
+) -> list[dict[str, object]]:
+    if len(candidates) <= 1:
+        return list(candidates)
+
+    premium_window = min(
+        len(candidates),
+        max(int(target_size) * int(FALLBACK_BANK_PREMIUM_WINDOW_MULTIPLIER), int(FALLBACK_BANK_PREMIUM_WINDOW_MIN)),
+    )
+    premium_candidates = list(candidates[:premium_window])
+    tail_candidates = list(candidates[premium_window:])
+    run_hint = _run_rotation_hint(run_id)
+
+    grouped: dict[int, list[dict[str, object]]] = {}
+    for entry in premium_candidates:
+        band_key = _quality_band(entry.get("adjusted_quality_score", entry.get("quality_score", 0.0)))
+        grouped.setdefault(int(band_key), []).append(entry)
+
+    rotated_premium: list[dict[str, object]] = []
+    for band_key in sorted(grouped, reverse=True):
+        band_entries = grouped[int(band_key)]
+        if len(band_entries) <= 1:
+            rotated_premium.extend(band_entries)
+            continue
+        offset = int(run_hint % len(band_entries))
+        for idx in _rotated_index_order(len(band_entries), offset):
+            rotated_premium.append(band_entries[int(idx)])
+    return rotated_premium + tail_candidates
+
+
 def _build_fallback_bundle_bank(
     bundles_df: pd.DataFrame,
     *,
+    run_id: str,
     target_size: int,
     max_size: int,
     min_score: float | None,
 ) -> tuple[list[dict[str, object]], dict[str, object]]:
     if bundles_df.empty:
-        return [], {"candidate_count": 0, "kept_after_filters": 0, "selected_count": 0, "category_cap": 0}
+        return [], {
+            "candidate_count": 0,
+            "kept_after_filters": 0,
+            "selected_count": 0,
+            "category_cap": 0,
+            "anchor_category_cap": 0,
+        }
 
     requested_target_size = max(1, int(target_size))
     requested_max_size = max(1, int(max_size))
@@ -710,7 +1193,8 @@ def _build_fallback_bundle_bank(
     if requested_target_size > effective_max_size:
         requested_target_size = int(effective_max_size)
 
-    category_cap = max(10, int(requested_target_size // 20))
+    category_cap = max(2, min(6, int(requested_target_size // 4) + 1))
+    anchor_category_cap = max(2, min(6, int(requested_target_size // 5) + 1))
     candidates: list[dict[str, object]] = []
     pair_seen: set[tuple[int, int]] = set()
 
@@ -734,14 +1218,26 @@ def _build_fallback_bundle_bank(
         pair_seen.add(pair_key)
 
         quality_score = _fallback_quality_score(row)
+        support_signal_count = _fallback_support_signal_count(row)
+        genericity_penalty = _fallback_genericity_penalty(row)
+        adjusted_quality_score = float(
+            quality_score + (FALLBACK_SUPPORT_SIGNAL_BONUS * float(support_signal_count)) - float(genericity_penalty)
+        )
         category_key = _fallback_category_key(row)
+        anchor_category = str(row.get("category_a", "") or "").strip().lower() or "unknown"
+        complement_category = str(row.get("category_b", "") or "").strip().lower() or "unknown"
         candidates.append(
             {
                 "item_1_id": int(api_record["item_1_id"]),
                 "item_2_id": int(api_record["item_2_id"]),
                 "bundle_price": float(api_record["bundle_price"]),
                 "quality_score": float(round(quality_score, 6)),
+                "adjusted_quality_score": float(round(adjusted_quality_score, 6)),
+                "support_signal_count": int(support_signal_count),
+                "genericity_penalty": float(round(genericity_penalty, 6)),
                 "category_key": f"{category_key[0]}|{category_key[1]}",
+                "anchor_category": str(anchor_category),
+                "complement_category": str(complement_category),
                 "final_score": float(_safe_float(row.get("new_final_score"), default=_safe_float(row.get("final_score"), 0.0))),
                 "pair_count": float(_safe_float(row.get("pair_count"), 0.0)),
                 "recipe_compat_score": float(_safe_float(row.get("recipe_compat_score"), default=_safe_float(row.get("recipe_score_norm"), 0.0))),
@@ -750,7 +1246,10 @@ def _build_fallback_bundle_bank(
 
     candidates.sort(
         key=lambda entry: (
+            -float(entry.get("adjusted_quality_score", entry.get("quality_score", 0.0))),
             -float(entry.get("quality_score", 0.0)),
+            int(entry.get("support_signal_count", 0)) * -1,
+            float(entry.get("genericity_penalty", 0.0)),
             -float(entry.get("final_score", 0.0)),
             -float(entry.get("pair_count", 0.0)),
             str(entry.get("category_key", "")),
@@ -758,22 +1257,37 @@ def _build_fallback_bundle_bank(
             int(entry.get("item_2_id", 0)),
         )
     )
+    ordered_candidates = _order_fallback_bank_candidates_for_run(
+        candidates,
+        run_id=str(run_id),
+        target_size=int(requested_target_size),
+    )
 
     selected: list[dict[str, object]] = []
     category_counts: dict[str, int] = {}
+    anchor_category_counts: dict[str, int] = {}
+    complement_category_counts: dict[str, int] = {}
     selected_pair_keys: set[tuple[int, int]] = set()
-    for entry in candidates:
+    for entry in ordered_candidates:
         category_key = str(entry.get("category_key", "unknown|unknown"))
         if int(category_counts.get(category_key, 0)) >= category_cap:
             continue
+        anchor_category = str(entry.get("anchor_category", "unknown"))
+        complement_category = str(entry.get("complement_category", "unknown"))
+        if int(anchor_category_counts.get(anchor_category, 0)) >= anchor_category_cap:
+            continue
+        if int(complement_category_counts.get(complement_category, 0)) >= anchor_category_cap:
+            continue
         category_counts[category_key] = int(category_counts.get(category_key, 0)) + 1
+        anchor_category_counts[anchor_category] = int(anchor_category_counts.get(anchor_category, 0)) + 1
+        complement_category_counts[complement_category] = int(complement_category_counts.get(complement_category, 0)) + 1
         selected.append(entry)
         selected_pair_keys.add(_bundle_pair_key(int(entry.get("item_1_id", 0)), int(entry.get("item_2_id", 0))))
         if len(selected) >= requested_target_size:
             break
 
     if len(selected) < min(requested_target_size, effective_max_size):
-        for entry in candidates:
+        for entry in ordered_candidates:
             pair_key = _bundle_pair_key(int(entry.get("item_1_id", 0)), int(entry.get("item_2_id", 0)))
             if pair_key in selected_pair_keys:
                 continue
@@ -790,8 +1304,16 @@ def _build_fallback_bundle_bank(
         "kept_after_filters": int(len(candidates)),
         "selected_count": int(len(selected)),
         "category_cap": int(category_cap),
+        "anchor_category_cap": int(anchor_category_cap),
         "target_size": int(requested_target_size),
         "max_size": int(effective_max_size),
+        "quality_band_width": float(FALLBACK_QUALITY_BAND_WIDTH),
+        "premium_window_size": int(
+            min(
+                len(candidates),
+                max(int(requested_target_size) * int(FALLBACK_BANK_PREMIUM_WINDOW_MULTIPLIER), int(FALLBACK_BANK_PREMIUM_WINDOW_MIN)),
+            )
+        ),
         "min_score": None if min_score is None else float(min_score),
     }
 
@@ -817,6 +1339,8 @@ def _write_fallback_bundle_bank_artifact(
                 "bundle_price": float(entry["bundle_price"]),
                 "quality_score": float(entry.get("quality_score", 0.0)),
                 "category_key": str(entry.get("category_key", "")),
+                "anchor_category": str(entry.get("anchor_category", "")),
+                "complement_category": str(entry.get("complement_category", "")),
             }
             for entry in fallback_bank
         ],
@@ -827,15 +1351,70 @@ def _write_fallback_bundle_bank_artifact(
     return path
 
 
+def _fallback_rotation_start(*, user_id: int, run_id: str, pool_size: int, run_multiplier: int = 1) -> int:
+    size = max(1, int(pool_size))
+    run_hint = _run_rotation_hint(run_id)
+    mixed = (int(user_id) * 2654435761) + (int(run_multiplier) * int(run_hint))
+    return int(mixed % size)
+
+
+def _ordered_fallback_indices(
+    *,
+    fallback_bank_size: int,
+    run_id: str,
+    user_id: int,
+    target: int,
+    run_multiplier: int = 1,
+) -> list[int]:
+    size = int(fallback_bank_size)
+    if size <= 0:
+        return []
+    start = _fallback_rotation_start(
+        user_id=int(user_id),
+        run_id=str(run_id or ""),
+        pool_size=size,
+        run_multiplier=int(run_multiplier),
+    )
+    premium_size = min(size, max(int(target) * int(FALLBACK_PREMIUM_POOL_MULTIPLIER), int(FALLBACK_PREMIUM_POOL_MIN)))
+    premium_order = _rotated_index_order(premium_size, start)
+    if premium_size >= size:
+        return premium_order
+    tail_order = _rotated_index_order(size - premium_size, start)
+    return premium_order + [int(premium_size + idx) for idx in tail_order]
+
+
+def _prioritized_fallback_indices(
+    *,
+    fallback_bank: list[dict[str, object]],
+    run_id: str,
+    user_id: int,
+    target: int,
+    history_product_ids: set[int],
+) -> list[int]:
+    del history_product_ids
+    selection_step = max(1, _coprime_rotation_step(len(fallback_bank)) - 1)
+    return _ordered_fallback_indices(
+        fallback_bank_size=len(fallback_bank),
+        run_id=run_id,
+        user_id=user_id,
+        target=target,
+        run_multiplier=selection_step,
+    )
+
+
 def _select_fallback_for_user(
     *,
     user_id: int,
+    run_id: str,
     current_bundles: list[dict[str, object]],
     fallback_bank: list[dict[str, object]],
     max_bundles_per_user: int,
+    history_product_ids: set[int],
 ) -> list[dict[str, object]]:
     target = max(1, int(max_bundles_per_user))
-    selected = [dict(bundle) for bundle in current_bundles[:target] if isinstance(bundle, dict)]
+    current_selected = [dict(bundle) for bundle in current_bundles[:target] if isinstance(bundle, dict)]
+    selected = list(current_selected)
+    fallback_selected: list[dict[str, object]] = []
     if len(selected) >= target or not fallback_bank:
         return selected[:target]
 
@@ -850,13 +1429,32 @@ def _select_fallback_for_user(
         for pid in (bundle.get("item_1_id"), bundle.get("item_2_id"))
         if _safe_positive_int(pid) is not None
     }
-
-    start = int(user_id) % len(fallback_bank)
-    for strict_no_item_overlap in (True, False):
+    category_seen = {
+        str(bundle.get("category_key", "")).strip().lower()
+        for bundle in selected
+        if isinstance(bundle, dict) and str(bundle.get("category_key", "")).strip()
+    }
+    history_ids = {int(pid) for pid in history_product_ids if int(pid) > 0}
+    ordered_indices = _prioritized_fallback_indices(
+        fallback_bank=fallback_bank,
+        run_id=run_id,
+        user_id=int(user_id),
+        target=target,
+        history_product_ids=history_ids,
+    )
+    selection_passes = (
+        (True, True),
+        (True, False),
+        (False, True),
+        (False, False),
+    )
+    for strict_no_item_overlap, strict_category_diversity in selection_passes:
         if len(selected) >= target:
             break
-        for offset in range(len(fallback_bank)):
-            entry = fallback_bank[(start + offset) % len(fallback_bank)]
+        for idx in ordered_indices:
+            if len(selected) >= target:
+                break
+            entry = fallback_bank[int(idx)]
             item_1_id = _safe_positive_int(entry.get("item_1_id"))
             item_2_id = _safe_positive_int(entry.get("item_2_id"))
             if item_1_id is None or item_2_id is None or item_1_id == item_2_id:
@@ -866,20 +1464,46 @@ def _select_fallback_for_user(
                 continue
             if strict_no_item_overlap and (item_1_id in item_seen or item_2_id in item_seen):
                 continue
-
-            selected.append(
-                {
-                    "item_1_id": int(item_1_id),
-                    "item_2_id": int(item_2_id),
-                    "bundle_price": float(round(max(0.0, _safe_float(entry.get("bundle_price"), 0.0)), 2)),
-                }
+            history_overlap = _history_overlap_count(item_1_id, item_2_id, history_ids)
+            category_key = str(entry.get("category_key", "")).strip().lower()
+            if strict_category_diversity and category_key and category_key in category_seen and history_overlap <= 0:
+                continue
+            selection_score = float(_safe_float(entry.get("adjusted_quality_score"), default=_safe_float(entry.get("quality_score"), 0.0)))
+            selection_score += _history_support_boost(
+                history_overlap,
+                first=FALLBACK_HISTORY_PRIMARY_BOOST,
+                second=FALLBACK_HISTORY_SECONDARY_BOOST,
             )
+            selected_entry = {
+                "item_1_id": int(item_1_id),
+                "item_2_id": int(item_2_id),
+                "bundle_price": float(round(max(0.0, _safe_float(entry.get("bundle_price"), 0.0)), 2)),
+                "_selection_score": float(selection_score),
+            }
+            selected.append(selected_entry)
+            fallback_selected.append(selected_entry)
             pair_seen.add(pair_key)
             item_seen.add(int(item_1_id))
             item_seen.add(int(item_2_id))
-            if len(selected) >= target:
-                break
-    return selected[:target]
+            if category_key:
+                category_seen.add(category_key)
+    ordered_fallback = sorted(
+        fallback_selected,
+        key=lambda entry: (
+            -float(entry.get("_selection_score", 0.0)),
+            int(entry.get("item_1_id", 0)),
+            int(entry.get("item_2_id", 0)),
+        ),
+    )
+    combined = list(current_selected) + ordered_fallback
+    return [
+        {
+            "item_1_id": int(entry["item_1_id"]),
+            "item_2_id": int(entry["item_2_id"]),
+            "bundle_price": float(round(max(0.0, _safe_float(entry.get("bundle_price"), 0.0)), 2)),
+        }
+        for entry in combined[:target]
+    ]
 
 
 def _upload_artifact_to_s3_if_configured(path: Path, *, key_env: str, default_key: str, artifact_label: str) -> None:
@@ -1004,6 +1628,7 @@ def materialize_final_recommendations_by_user(
     if fallback_enabled:
         fallback_bank, fallback_bank_meta = _build_fallback_bundle_bank(
             bundles_df=bundles_df,
+            run_id=str(run_id),
             target_size=int(fallback_target_size),
             max_size=int(fallback_max_size),
             min_score=fallback_min_score,
@@ -1014,6 +1639,7 @@ def materialize_final_recommendations_by_user(
             "kept_after_filters": 0,
             "selected_count": 0,
             "category_cap": 0,
+            "anchor_category_cap": 0,
             "target_size": int(fallback_target_size),
             "max_size": int(fallback_max_size),
             "min_score": None if fallback_min_score is None else float(fallback_min_score),
@@ -1028,6 +1654,7 @@ def materialize_final_recommendations_by_user(
         int(fallback_bank_meta.get("max_size", 0)),
         "none" if fallback_min_score is None else str(float(fallback_min_score)),
     )
+    pair_quality_lookup = _build_pair_quality_lookup(bundles_df)
 
     profiles: list[PersonProfile] = []
     for user_id in user_ids:
@@ -1038,6 +1665,14 @@ def materialize_final_recommendations_by_user(
         if profile is None or len(profile.history_product_ids) < MIN_HISTORY_PRODUCTS:
             continue
         profiles.append(profile)
+    profile_history_by_user_id: dict[int, set[int]] = {}
+    for profile in profiles:
+        user_id = _extract_api_user_id(profile.profile_id)
+        if user_id is None:
+            continue
+        profile_history_by_user_id[int(user_id)] = {
+            int(pid) for pid in profile.history_product_ids if int(pid) > 0
+        }
 
     recommendations_by_user: dict[int, list[dict[str, object]]] = {int(user_id): [] for user_id in user_ids}
     if profiles:
@@ -1062,17 +1697,12 @@ def materialize_final_recommendations_by_user(
         bundles_raw = rec.get("bundles", [])
         if not isinstance(bundles_raw, list):
             continue
-        bundles: list[dict[str, object]] = []
-        for bundle in bundles_raw:
-            if not isinstance(bundle, dict):
-                continue
-            api_record = _bundle_to_api_record(bundle)
-            if api_record is None:
-                continue
-            bundles.append(api_record)
-            if len(bundles) >= int(max_bundles_per_user):
-                break
-        recommendations_by_user[int(user_id)] = bundles
+        recommendations_by_user[int(user_id)] = _select_personalized_bundles_for_user(
+            bundles_raw=[bundle for bundle in bundles_raw if isinstance(bundle, dict)],
+            max_bundles_per_user=int(max_bundles_per_user),
+            history_product_ids=profile_history_by_user_id.get(int(user_id), set()),
+            pair_quality_lookup=pair_quality_lookup,
+        )
 
     fallback_slots_filled = 0
     fallback_users_touched = 0
@@ -1082,9 +1712,11 @@ def materialize_final_recommendations_by_user(
             before = int(len(current))
             filled = _select_fallback_for_user(
                 user_id=int(user_id),
+                run_id=str(run_id),
                 current_bundles=current,
                 fallback_bank=fallback_bank,
                 max_bundles_per_user=int(max_bundles_per_user),
+                history_product_ids=profile_history_by_user_id.get(int(user_id), set()),
             )
             after = int(len(filled))
             if after > before:

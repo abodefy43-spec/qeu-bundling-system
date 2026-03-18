@@ -209,6 +209,37 @@ class FinalRecommendationsTests(unittest.TestCase):
             rows.append({"profile_id": profile_id, "bundles": bundles})
         return rows
 
+    @staticmethod
+    def _dense_fallback_scored_df() -> pd.DataFrame:
+        rows: list[dict[str, object]] = []
+        for idx in range(1, 25):
+            item_1 = 6000 + (idx * 2)
+            item_2 = item_1 + 1
+            rows.append(
+                {
+                    "product_a": item_1,
+                    "product_b": item_2,
+                    "product_a_price": 14.0 + (idx % 3),
+                    "product_b_price": 7.0 + (idx % 2),
+                    "purchase_price_a": 9.0 + (idx % 2),
+                    "purchase_price_b": 4.0 + (idx % 2),
+                    "new_final_score": 140.0 - float(idx),
+                    "model_score": 90.0 - float(idx % 7),
+                    "recipe_compat_score": 0.9,
+                    "pair_count": 12,
+                    "shared_categories_count": 4,
+                    "known_prior_flag": 1,
+                    "deal_signal": 0.25,
+                    "pair_penalty_multiplier": 1.0,
+                    "utility_penalty_multiplier": 1.0,
+                    "weak_evidence_free_blocked": 0,
+                    "only_staples_overlap": 0,
+                    "category_a": f"cat_{idx % 6}",
+                    "category_b": f"cat_{(idx + 1) % 6}",
+                }
+            )
+        return pd.DataFrame(rows)
+
     def test_materialize_respects_max_users_cap_with_deterministic_order(self):
         orders_df = pd.DataFrame(
             [
@@ -526,6 +557,376 @@ class FinalRecommendationsTests(unittest.TestCase):
 
         self.assertEqual(bank_a["bundles"], bank_b["bundles"])
         self.assertEqual(rec_a["recommendations_by_user"], rec_b["recommendations_by_user"])
+
+    def test_same_user_gets_new_bundles_across_7_daily_runs(self):
+        orders_df = pd.DataFrame([{"order_id": 11, "user_id": 101}])
+        order_pool = SimpleNamespace(
+            order_product_ids={11: [1001, 1002]},
+            order_product_names={11: ["a", "b"]},
+        )
+        scored_df = self._dense_fallback_scored_df()
+
+        def _no_personalized_recommendations(*, profiles, **kwargs):
+            return [{"profile_id": str(profile.profile_id), "bundles": []} for profile in profiles]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            observed_bundle_sets: list[tuple[tuple[int, int], ...]] = []
+
+            for day_idx in range(1, 8):
+                with patch.dict(
+                    os.environ,
+                    {
+                        "QEU_FALLBACK_BUNDLE_BANK_ENABLED": "1",
+                        "QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE": "12",
+                        "QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE": "20",
+                    },
+                    clear=False,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._latest_run_id",
+                    return_value=f"run_day_{day_idx}",
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._load_orders_frame",
+                    return_value=orders_df,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations.load_order_pool",
+                    return_value=order_pool,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations.load_bundle_view",
+                    return_value=SimpleNamespace(bundles_df=scored_df),
+                ), patch(
+                    "qeu_bundling.core.final_recommendations.build_recommendations_for_profiles",
+                    side_effect=_no_personalized_recommendations,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._upload_final_artifact_to_s3_if_configured",
+                    return_value=None,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._upload_fallback_bank_artifact_to_s3_if_configured",
+                    return_value=None,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._upload_bundle_ids_artifact_to_s3_if_configured",
+                    return_value=None,
+                ):
+                    materialize_final_recommendations_by_user(base_dir=base_dir, max_users=1)
+
+                payload = json.loads((base_dir / "output" / "final_recommendations_by_user.json").read_text(encoding="utf-8"))
+                bundles = payload["recommendations_by_user"]["101"]
+                pair_set = tuple(
+                    sorted(
+                        tuple(sorted((int(bundle["item_1_id"]), int(bundle["item_2_id"]))))
+                        for bundle in bundles
+                    )
+                )
+                observed_bundle_sets.append(pair_set)
+
+        self.assertEqual(len(observed_bundle_sets), 7)
+        self.assertEqual(
+            len(set(observed_bundle_sets)),
+            7,
+            msg="Expected a different 3-bundle set for user 101 across seven daily runs.",
+        )
+
+    def test_materialize_preserves_upstream_intentful_pair_over_exact_history_overlap(self):
+        orders_df = pd.DataFrame([{"order_id": 11, "user_id": 101}])
+        order_pool = SimpleNamespace(
+            order_product_ids={11: [1001, 1002]},
+            order_product_names={11: ["history anchor", "history staple"]},
+        )
+        scored_df = pd.DataFrame(
+            [
+                {
+                    "product_a": 8001,
+                    "product_b": 8002,
+                    "product_a_price": 15.0,
+                    "product_b_price": 7.0,
+                    "purchase_price_a": 10.0,
+                    "purchase_price_b": 4.0,
+                    "new_final_score": 94.0,
+                    "model_score": 88.0,
+                    "recipe_compat_score": 0.88,
+                    "pair_count": 10,
+                    "shared_categories_count": 4,
+                    "known_prior_flag": 1,
+                    "deal_signal": 0.2,
+                    "pair_penalty_multiplier": 1.0,
+                    "utility_penalty_multiplier": 1.0,
+                    "weak_evidence_free_blocked": 0,
+                    "only_staples_overlap": 0,
+                    "category_a": "snacks",
+                    "category_b": "beverages",
+                },
+                {
+                    "product_a": 1001,
+                    "product_b": 8003,
+                    "product_a_price": 18.0,
+                    "product_b_price": 6.0,
+                    "purchase_price_a": 11.0,
+                    "purchase_price_b": 3.0,
+                    "new_final_score": 95.0,
+                    "model_score": 85.0,
+                    "recipe_compat_score": 0.70,
+                    "pair_count": 9,
+                    "shared_categories_count": 4,
+                    "known_prior_flag": 1,
+                    "deal_signal": 0.15,
+                    "pair_penalty_multiplier": 1.0,
+                    "utility_penalty_multiplier": 1.0,
+                    "weak_evidence_free_blocked": 0,
+                    "only_staples_overlap": 0,
+                    "category_a": "protein",
+                    "category_b": "sauce",
+                },
+            ]
+        )
+
+        def _fake_recommendations(*, profiles, **kwargs):
+            return [
+                {
+                    "profile_id": str(profiles[0].profile_id),
+                    "bundles": [
+                        {
+                            "product_a": 8001,
+                            "product_b": 8002,
+                            "product_a_price": 15.0,
+                            "product_b_price": 7.0,
+                            "purchase_price_a": 10.0,
+                            "purchase_price_b": 4.0,
+                            "hybrid_reco_score": 2.6,
+                            "confidence_score": 96.0,
+                            "recommendation_origin": "top_bundle",
+                            "pair_strength": "strong",
+                            "lane": "snack",
+                        },
+                        {
+                            "product_a": 1001,
+                            "product_b": 8003,
+                            "product_a_price": 18.0,
+                            "product_b_price": 6.0,
+                            "purchase_price_a": 11.0,
+                            "purchase_price_b": 3.0,
+                            "hybrid_reco_score": 1.5,
+                            "confidence_score": 83.0,
+                            "recommendation_origin": "copurchase_fallback",
+                            "pair_strength": "medium",
+                            "lane": "meal",
+                        },
+                    ],
+                }
+            ]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            with patch.dict(
+                os.environ,
+                {
+                    "QEU_FALLBACK_BUNDLE_BANK_ENABLED": "0",
+                },
+                clear=False,
+            ), patch("qeu_bundling.core.final_recommendations._latest_run_id", return_value="run_intentful_keep"), patch(
+                "qeu_bundling.core.final_recommendations._load_orders_frame",
+                return_value=orders_df,
+            ), patch(
+                "qeu_bundling.core.final_recommendations.load_order_pool",
+                return_value=order_pool,
+            ), patch(
+                "qeu_bundling.core.final_recommendations.load_bundle_view",
+                return_value=SimpleNamespace(bundles_df=scored_df),
+            ), patch(
+                "qeu_bundling.core.final_recommendations.build_recommendations_for_profiles",
+                side_effect=_fake_recommendations,
+            ), patch(
+                "qeu_bundling.core.final_recommendations._upload_final_artifact_to_s3_if_configured",
+                return_value=None,
+            ), patch(
+                "qeu_bundling.core.final_recommendations._upload_fallback_bank_artifact_to_s3_if_configured",
+                return_value=None,
+            ), patch(
+                "qeu_bundling.core.final_recommendations._upload_bundle_ids_artifact_to_s3_if_configured",
+                return_value=None,
+            ):
+                materialize_final_recommendations_by_user(base_dir=base_dir, max_users=1)
+
+            payload = json.loads((base_dir / "output" / "final_recommendations_by_user.json").read_text(encoding="utf-8"))
+            bundles = payload["recommendations_by_user"]["101"]
+            first_pair = tuple(sorted((int(bundles[0]["item_1_id"]), int(bundles[0]["item_2_id"]))))
+            self.assertEqual(first_pair, (8001, 8002))
+
+    def test_fallback_prefers_stronger_non_history_pair_when_quality_gap_is_clear(self):
+        orders_df = pd.DataFrame([{"order_id": 11, "user_id": 101}])
+        order_pool = SimpleNamespace(
+            order_product_ids={11: [1001, 1002]},
+            order_product_names={11: ["history anchor", "history staple"]},
+        )
+        scored_df = pd.DataFrame(
+            [
+                {
+                    "product_a": 8101,
+                    "product_b": 8102,
+                    "product_a_price": 16.0,
+                    "product_b_price": 8.0,
+                    "purchase_price_a": 10.0,
+                    "purchase_price_b": 4.0,
+                    "new_final_score": 97.0,
+                    "model_score": 90.0,
+                    "recipe_compat_score": 0.92,
+                    "pair_count": 14,
+                    "shared_categories_count": 5,
+                    "known_prior_flag": 1,
+                    "deal_signal": 0.25,
+                    "pair_penalty_multiplier": 1.0,
+                    "utility_penalty_multiplier": 1.0,
+                    "weak_evidence_free_blocked": 0,
+                    "only_staples_overlap": 0,
+                    "category_a": "snacks",
+                    "category_b": "beverages",
+                },
+                {
+                    "product_a": 1001,
+                    "product_b": 8103,
+                    "product_a_price": 15.0,
+                    "product_b_price": 6.0,
+                    "purchase_price_a": 9.0,
+                    "purchase_price_b": 3.0,
+                    "new_final_score": 90.0,
+                    "model_score": 84.0,
+                    "recipe_compat_score": 0.74,
+                    "pair_count": 8,
+                    "shared_categories_count": 4,
+                    "known_prior_flag": 1,
+                    "deal_signal": 0.18,
+                    "pair_penalty_multiplier": 1.0,
+                    "utility_penalty_multiplier": 1.0,
+                    "weak_evidence_free_blocked": 0,
+                    "only_staples_overlap": 0,
+                    "category_a": "protein",
+                    "category_b": "sauce",
+                },
+                {
+                    "product_a": 1002,
+                    "product_b": 8104,
+                    "product_a_price": 14.0,
+                    "product_b_price": 5.0,
+                    "purchase_price_a": 8.0,
+                    "purchase_price_b": 2.0,
+                    "new_final_score": 89.0,
+                    "model_score": 83.0,
+                    "recipe_compat_score": 0.72,
+                    "pair_count": 7,
+                    "shared_categories_count": 3,
+                    "known_prior_flag": 1,
+                    "deal_signal": 0.15,
+                    "pair_penalty_multiplier": 1.0,
+                    "utility_penalty_multiplier": 1.0,
+                    "weak_evidence_free_blocked": 0,
+                    "only_staples_overlap": 0,
+                    "category_a": "bread",
+                    "category_b": "protein",
+                },
+            ]
+        )
+
+        def _no_personalized_recommendations(*, profiles, **kwargs):
+            return [{"profile_id": str(profile.profile_id), "bundles": []} for profile in profiles]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            base_dir = Path(tmp)
+            with patch.dict(
+                os.environ,
+                {
+                    "QEU_FALLBACK_BUNDLE_BANK_ENABLED": "1",
+                    "QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE": "3",
+                    "QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE": "3",
+                },
+                clear=False,
+            ), patch("qeu_bundling.core.final_recommendations._latest_run_id", return_value="run_fallback_quality_gap"), patch(
+                "qeu_bundling.core.final_recommendations._load_orders_frame",
+                return_value=orders_df,
+            ), patch(
+                "qeu_bundling.core.final_recommendations.load_order_pool",
+                return_value=order_pool,
+            ), patch(
+                "qeu_bundling.core.final_recommendations.load_bundle_view",
+                return_value=SimpleNamespace(bundles_df=scored_df),
+            ), patch(
+                "qeu_bundling.core.final_recommendations.build_recommendations_for_profiles",
+                side_effect=_no_personalized_recommendations,
+            ), patch(
+                "qeu_bundling.core.final_recommendations._upload_final_artifact_to_s3_if_configured",
+                return_value=None,
+            ), patch(
+                "qeu_bundling.core.final_recommendations._upload_fallback_bank_artifact_to_s3_if_configured",
+                return_value=None,
+            ), patch(
+                "qeu_bundling.core.final_recommendations._upload_bundle_ids_artifact_to_s3_if_configured",
+                return_value=None,
+            ):
+                materialize_final_recommendations_by_user(base_dir=base_dir, max_users=1, max_bundles_per_user=2)
+
+            payload = json.loads((base_dir / "output" / "final_recommendations_by_user.json").read_text(encoding="utf-8"))
+            bundles = payload["recommendations_by_user"]["101"]
+            pair_keys = {
+                tuple(sorted((int(bundle["item_1_id"]), int(bundle["item_2_id"]))))
+                for bundle in bundles
+            }
+            self.assertIn((8101, 8102), pair_keys)
+            first_pair = tuple(sorted((int(bundles[0]["item_1_id"]), int(bundles[0]["item_2_id"]))))
+            self.assertEqual(first_pair, (8101, 8102))
+
+    def test_fallback_bank_rotates_across_runs_with_same_inputs(self):
+        orders_df = pd.DataFrame([{"order_id": 11, "user_id": 101}])
+        order_pool = SimpleNamespace(
+            order_product_ids={11: [1001, 1002]},
+            order_product_names={11: ["a", "b"]},
+        )
+        scored_df = self._dense_fallback_scored_df()
+
+        def _run_once(run_id: str) -> list[tuple[int, int]]:
+            with tempfile.TemporaryDirectory() as tmp:
+                base_dir = Path(tmp)
+                with patch.dict(
+                    os.environ,
+                    {
+                        "QEU_FALLBACK_BUNDLE_BANK_ENABLED": "1",
+                        "QEU_FALLBACK_BUNDLE_BANK_TARGET_SIZE": "8",
+                        "QEU_FALLBACK_BUNDLE_BANK_MAX_SIZE": "8",
+                    },
+                    clear=False,
+                ), patch("qeu_bundling.core.final_recommendations._latest_run_id", return_value=run_id), patch(
+                    "qeu_bundling.core.final_recommendations._load_orders_frame",
+                    return_value=orders_df,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations.load_order_pool",
+                    return_value=order_pool,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations.load_bundle_view",
+                    return_value=SimpleNamespace(bundles_df=scored_df),
+                ), patch(
+                    "qeu_bundling.core.final_recommendations.build_recommendations_for_profiles",
+                    side_effect=lambda *, profiles, **kwargs: [
+                        {"profile_id": str(profile.profile_id), "bundles": []} for profile in profiles
+                    ],
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._upload_final_artifact_to_s3_if_configured",
+                    return_value=None,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._upload_fallback_bank_artifact_to_s3_if_configured",
+                    return_value=None,
+                ), patch(
+                    "qeu_bundling.core.final_recommendations._upload_bundle_ids_artifact_to_s3_if_configured",
+                    return_value=None,
+                ):
+                    materialize_final_recommendations_by_user(base_dir=base_dir, max_users=1)
+                bank_payload = json.loads((base_dir / "output" / "fallback_bundle_bank.json").read_text(encoding="utf-8"))
+                return [
+                    tuple(sorted((int(entry["item_1_id"]), int(entry["item_2_id"]))))
+                    for entry in bank_payload["bundles"]
+                ]
+
+        bank_run_1 = _run_once("run_bank_rotation_day_1")
+        bank_run_2 = _run_once("run_bank_rotation_day_2")
+        self.assertEqual(len(bank_run_1), 8)
+        self.assertEqual(len(bank_run_2), 8)
+        self.assertNotEqual(bank_run_1, bank_run_2)
 
     def test_bundle_id_registry_is_written_and_persists_across_runs(self):
         orders_df = pd.DataFrame(

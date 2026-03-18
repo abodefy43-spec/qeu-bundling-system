@@ -1,10 +1,12 @@
 # data/reference
 
-Versioned static configuration and taxonomy files:
+Stable reference inputs for future engine work belong here.
+
+Examples already in the repo:
 
 - `recipe_data.json`
 - `product_families.json`
 - `theme_tokens.json`
 - `category_importance.csv`
 
-These are inputs to multiple phases and should remain stable between runs unless intentionally updated.
+Reference data stays versioned. Generated runtime output does not.

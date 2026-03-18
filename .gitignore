@@ -71,6 +71,10 @@ data/processed/*.csv
 data/processed/*.pkl
 data/processed/*.npy
 data/processed/*.npz
+data/processed/artifacts/
+data/processed/features/
+data/processed/reports/
+data/processed/runs/
 
 # Secrets and certificates
 *.pem

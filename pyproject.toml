@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qeu-bundling-system"
+version = "0.1.0"
+description = "Phase 0 cleanup scaffold for three recommendation engines."
+requires-python = ">=3.11"
+dependencies = [
+  "Flask>=3.0,<4",
+  "pandas>=2.2,<3",
+  "pyarrow>=18,<20",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+exclude = ["legacy*", "legacy.*"]
